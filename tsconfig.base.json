@@ -1,0 +1,21 @@
+{
+	"compilerOptions": {
+		"target": "ESNext",
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"allowSyntheticDefaultImports": true,
+		"declaration": true,
+		"sourceMap": true,
+		"forceConsistentCasingInFileNames": true,
+		"skipLibCheck": true,
+		"strict": false,
+		"resolveJsonModule": true,
+		"esModuleInterop": true,
+		"composite": true,
+		"experimentalDecorators": true,
+		"emitDecoratorMetadata": true
+	},
+	"ts-node": {
+		"transpileOnly": true
+	}
+}

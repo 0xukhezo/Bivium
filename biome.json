@@ -1,0 +1,65 @@
+{
+	"$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"organizeImports": {
+		"enabled": true
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab"
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": true,
+			"suspicious": {
+				"noExplicitAny": "off",
+				"noArrayIndexKey": "warn",
+				"noAssignInExpressions": "warn",
+				"noConstEnum": "warn"
+			},
+			"correctness": {
+				"noUnusedVariables": "error",
+				"noUnreachable": "error"
+			},
+			"style": {
+				"useConst": "warn",
+				"noUselessElse": "warn",
+				"useTemplate": "warn",
+				"useImportType": "warn",
+				"noNonNullAssertion": "off"
+			},
+			"complexity": {
+				"noForEach": "off",
+				"noStaticOnlyClass": "off",
+				"noBannedTypes": "off"
+			}
+		}
+	},
+	"javascript": {
+		"parser": {
+			"unsafeParameterDecoratorsEnabled": true
+		},
+		"formatter": {
+			"quoteStyle": "double",
+			"semicolons": "always"
+		}
+	},
+	"files": {
+		"maxSize": 20000000,
+		"ignore": [
+			"packages/infrastructure/src/prisma/migrations/**",
+			"packages/infrastructure/src/prisma/schema/**",
+			"**/*.tsbuildinfo",
+			"**/pnpm-lock.yaml",
+			"pnpm-workspace.yaml",
+			".env.example",
+			"apps/web/.next/**",
+			"apps/web/src/app/globals.css"
+		]
+	}
+}

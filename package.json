@@ -1,0 +1,49 @@
+{
+	"name": "bivium",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Monorepo with hexagonal architecture (ports & adapters), built with Turborepo + pnpm workspaces.",
+	"scripts": {
+		"format": "biome format --write .",
+		"lint": "biome lint .",
+		"check": "biome check --write .",
+		"build": "turbo run build",
+		"dev": "turbo run dev",
+		"test": "turbo run test",
+		"typecheck": "turbo run typecheck",
+		"start:api": "pnpm --dir apps/api start",
+		"dev:api": "pnpm --dir apps/api dev",
+		"start:reactor": "pnpm --dir apps/reactor start",
+		"dev:reactor": "pnpm --dir apps/reactor dev",
+		"start:watcher": "pnpm --dir apps/watcher start",
+		"dev:watcher": "pnpm --dir apps/watcher dev",
+		"dev:web": "pnpm --dir apps/web dev",
+		"build:web": "pnpm --dir apps/web build",
+		"start:web": "pnpm --dir apps/web start",
+		"prisma:generate": "turbo run prisma:generate",
+		"db:migrate": "turbo run db:migrate",
+		"db:deploy": "turbo run db:deploy",
+		"db:seed": "turbo run db:seed",
+		"db:reset": "turbo run db:reset",
+		"clean": "find . -name 'dist' -type d -not -path '*/node_modules/*' -exec rm -rf {} + && find . -name '.turbo' -type d -exec rm -rf {} + && find . -name 'tsconfig.tsbuildinfo' -type f -exec rm -f {} +",
+		"prepare": "husky || true"
+	},
+	"packageManager": "pnpm@10.33.0",
+	"engines": {
+		"node": ">=20"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.4",
+		"@types/node": "^22.13.5",
+		"husky": "^9.1.7",
+		"lint-staged": "^16.4.0",
+		"ts-node": "^10.9.2",
+		"tsx": "^4.19.2",
+		"turbo": "^2.4.4",
+		"typescript": "^5.7.3",
+		"vitest": "^3.2.4"
+	},
+	"pnpm": {
+		"onlyBuiltDependencies": ["@biomejs/biome", "@prisma/engines", "esbuild", "prisma"]
+	}
+}

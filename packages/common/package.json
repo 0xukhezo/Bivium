@@ -1,0 +1,52 @@
+{
+	"name": "@bivium/common",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"main": "dist/index.js",
+	"module": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"exports": {
+		".": {
+			"import": "./dist/index.js",
+			"types": "./dist/index.d.ts"
+		},
+		"./logger": {
+			"import": "./dist/logger/index.js",
+			"types": "./dist/logger/index.d.ts"
+		},
+		"./errors": {
+			"import": "./dist/errors/index.js",
+			"types": "./dist/errors/index.d.ts"
+		},
+		"./utils": {
+			"import": "./dist/utils/index.js",
+			"types": "./dist/utils/index.d.ts"
+		},
+		"./api": {
+			"import": "./dist/api/index.js",
+			"types": "./dist/api/index.d.ts"
+		},
+		"./dtos": {
+			"import": "./dist/dto/index.js",
+			"types": "./dist/dto/index.d.ts"
+		},
+		"./middlewares": {
+			"import": "./dist/middlewares/index.js",
+			"types": "./dist/middlewares/index.d.ts"
+		},
+		"./realtime": {
+			"import": "./dist/realtime/index.js",
+			"types": "./dist/realtime/index.d.ts"
+		}
+	},
+	"scripts": {
+		"build": "tsc -b",
+		"typecheck": "tsc -b --noEmit"
+	},
+	"dependencies": {
+		"dotenv": "^16.4.7",
+		"pino": "^9.6.0",
+		"zod": "^3.23.8"
+	}
+}

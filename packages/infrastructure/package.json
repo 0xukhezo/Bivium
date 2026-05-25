@@ -1,0 +1,44 @@
+{
+	"name": "@bivium/infrastructure",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"main": "dist/index.js",
+	"module": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"exports": {
+		"./package.json": "./package.json",
+		".": {
+			"import": "./dist/index.js",
+			"types": "./dist/index.d.ts"
+		},
+		"./prisma": "./generated/client/index.js",
+		"./mappers": {
+			"import": "./dist/mappers/index.js",
+			"types": "./dist/mappers/index.d.ts"
+		}
+	},
+	"scripts": {
+		"prisma:generate": "prisma generate --schema=./src/prisma/schema",
+		"db:migrate": "prisma migrate dev --schema=./src/prisma/schema",
+		"db:deploy": "prisma migrate deploy --schema=./src/prisma/schema",
+		"db:reset": "prisma db push --force-reset --schema=./src/prisma/schema && pnpm prisma:generate && tsx src/prisma/seed/index.ts",
+		"db:seed": "tsx src/prisma/seed/index.ts",
+		"prebuild": "pnpm run prisma:generate",
+		"build": "tsc -b",
+		"typecheck": "tsc -b --noEmit"
+	},
+	"prisma": {
+		"seed": "tsx src/prisma/seed/index.ts"
+	},
+	"dependencies": {
+		"@bivium/application": "workspace:*",
+		"@bivium/common": "workspace:*",
+		"@bivium/domain": "workspace:*",
+		"@prisma/client": "^5.22.0",
+		"dotenv": "^16.4.7",
+		"ioredis": "^5.4.1",
+		"prisma": "^5.22.0",
+		"zod": "^3.23.8"
+	}
+}
