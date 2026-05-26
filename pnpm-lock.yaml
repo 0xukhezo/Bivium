@@ -67,6 +67,8 @@ importers:
         specifier: ^5.0.0
         version: 5.0.6
 
+  apps/contracts: {}
+
   apps/reactor:
     dependencies:
       '@bivium/application':
