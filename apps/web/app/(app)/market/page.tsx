@@ -1,4 +1,4 @@
-import { TokenGrid } from "@/components/market/TokenGrid";
+import { MarketTable } from "@/components/market/MarketTable";
 
 export const metadata = {
   title: "Market · Bivium",
@@ -16,7 +16,7 @@ export default function MarketPage() {
           </h2>
         </div>
       </header>
-      <TokenGrid />
+      <MarketTable />
     </>
   );
 }

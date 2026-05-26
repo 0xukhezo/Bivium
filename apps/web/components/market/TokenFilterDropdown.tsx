@@ -91,7 +91,7 @@ export function TokenFilterDropdown({
         <div
           role="listbox"
           aria-multiselectable="true"
-          className="absolute right-0 z-20 mt-2 w-64 overflow-hidden rounded-md border border-border bg-bg-elevated p-1 shadow-card"
+          className="absolute left-0 z-20 mt-2 w-64 overflow-hidden rounded-md border border-border bg-bg-elevated p-1 shadow-card"
         >
           {tokens.map((token) => {
             const active = selectedAddresses.has(

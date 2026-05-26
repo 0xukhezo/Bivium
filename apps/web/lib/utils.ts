@@ -24,3 +24,18 @@ export function formatTokenAmount(value: number, opts: { decimals?: number; comp
     maximumFractionDigits: decimals,
   }).format(value);
 }
+
+export function formatCompact(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+export function formatUsd(value: number): string {
+  return `$${formatCompact(value)}`;
+}
+
+export function formatPercent(value: number, decimals = 2): string {
+  return `${(value * 100).toFixed(decimals)}%`;
+}
