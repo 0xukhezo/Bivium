@@ -9,14 +9,11 @@ export default function MarketPage() {
     <>
       <header className="mb-8 flex items-end justify-between gap-4">
         <div>
-          <p className="text-sm uppercase tracking-widest text-text-muted">Browse</p>
-          <h1 className="mt-1 text-3xl font-semibold text-text-primary">
-            <em>bivia</em>
-          </h1>
-          <p className="mt-2 max-w-xl text-text-secondary">
-            Single-lender venues currently accepting borrows. Each card is one sovereign
-            lender with their own terms.
-          </p>
+          <h1 className="text-3xl font-semibold text-text-primary">Market</h1>
+          <h2 className="mt-2 max-w-xl text-text-secondary">
+            Browse the open borrows and pick the ones to match against your
+            collateral.
+          </h2>
         </div>
       </header>
       <TokenGrid />
