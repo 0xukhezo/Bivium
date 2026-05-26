@@ -1,0 +1,14 @@
+{
+	"name": "contracts",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Bivium smart contracts (Solidity, Foundry).",
+	"scripts": {
+		"build": "forge build",
+		"test": "forge test",
+		"typecheck": "forge build --sizes",
+		"lint": "forge fmt --check",
+		"format": "forge fmt",
+		"clean": "forge clean"
+	}
+}

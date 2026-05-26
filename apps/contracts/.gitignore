@@ -1,0 +1,7 @@
+# Foundry artefacts
+out/
+cache/
+broadcast/
+
+# Local env
+.env
