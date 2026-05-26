@@ -1,0 +1,15 @@
+enum OnchainEventProvider {
+  ALCHEMY
+}
+
+enum AssetType {
+  NATIVE
+  ERC20
+}
+
+enum OutboxEventStatus {
+  PENDING
+  PROCESSING
+  PUBLISHED
+  FAILED
+}

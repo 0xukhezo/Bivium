@@ -17,8 +17,14 @@
 		"@bivium/common": "workspace:*",
 		"@bivium/domain": "workspace:*",
 		"@bivium/infrastructure": "workspace:*",
+		"amqplib": "^0.10.4",
 		"dotenv": "^16.4.7",
+		"inversify": "^7.10.4",
 		"reflect-metadata": "^0.2.2",
+		"tslib": "^2.8.1",
 		"zod": "^3.23.8"
+	},
+	"devDependencies": {
+		"@types/amqplib": "^0.10.5"
 	}
 }

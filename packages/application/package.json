@@ -20,6 +20,9 @@
 	},
 	"dependencies": {
 		"@bivium/common": "workspace:*",
-		"@bivium/domain": "workspace:*"
+		"@bivium/domain": "workspace:*",
+		"inversify": "^7.10.4",
+		"reflect-metadata": "^0.2.2",
+		"tslib": "^2.8.1"
 	}
 }

@@ -1,0 +1,17 @@
+model Asset {
+  id        String    @id @default(uuid())
+  chainId   Int       @map("chain_id")
+  address   String?   @map("address")
+  symbol    String
+  decimals  Int
+  name      String?
+  logoUrl   String?   @map("logo_url")
+  type      AssetType
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  balances UserCurrentBalance[]
+
+  @@unique([chainId, address])
+  @@map("assets")
+}
