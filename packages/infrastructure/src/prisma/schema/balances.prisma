@@ -1,0 +1,14 @@
+model UserCurrentBalance {
+  userId      String   @map("user_id")
+  assetId     String   @map("asset_id")
+  chainId     Int      @map("chain_id")
+  balance     Decimal  @db.Decimal(78, 0)
+  lastUpdated DateTime @updatedAt @map("last_updated")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@id([userId, assetId])
+  @@index([chainId])
+  @@map("user_current_balances")
+}

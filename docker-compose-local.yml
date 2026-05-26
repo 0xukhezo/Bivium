@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bivium-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bivium
+      POSTGRES_PASSWORD: bivium
+      POSTGRES_DB: bivium
+    ports:
+      - "5432:5432"
+    volumes:
+      - bivium_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bivium -d bivium"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: bivium-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: bivium
+      RABBITMQ_DEFAULT_PASS: bivium
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - bivium_rmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+volumes:
+  bivium_pg_data:
+  bivium_rmq_data:

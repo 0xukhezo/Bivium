@@ -19,25 +19,21 @@
 			"import": "./dist/errors/index.js",
 			"types": "./dist/errors/index.d.ts"
 		},
-		"./utils": {
-			"import": "./dist/utils/index.js",
-			"types": "./dist/utils/index.d.ts"
-		},
 		"./api": {
 			"import": "./dist/api/index.js",
 			"types": "./dist/api/index.d.ts"
 		},
-		"./dtos": {
-			"import": "./dist/dto/index.js",
-			"types": "./dist/dto/index.d.ts"
+		"./env": {
+			"import": "./dist/env/index.js",
+			"types": "./dist/env/index.d.ts"
 		},
 		"./middlewares": {
 			"import": "./dist/middlewares/index.js",
 			"types": "./dist/middlewares/index.d.ts"
 		},
-		"./realtime": {
-			"import": "./dist/realtime/index.js",
-			"types": "./dist/realtime/index.d.ts"
+		"./utils": {
+			"import": "./dist/utils/index.js",
+			"types": "./dist/utils/index.d.ts"
 		}
 	},
 	"scripts": {
@@ -46,7 +42,14 @@
 	},
 	"dependencies": {
 		"dotenv": "^16.4.7",
+		"inversify": "^7.10.4",
 		"pino": "^9.6.0",
+		"pino-pretty": "^11.3.0",
+		"reflect-metadata": "^0.2.2",
+		"tslib": "^2.8.1",
 		"zod": "^3.23.8"
+	},
+	"devDependencies": {
+		"@types/express": "^5.0.0"
 	}
 }
