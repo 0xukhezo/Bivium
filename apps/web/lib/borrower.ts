@@ -23,6 +23,18 @@ export function healthBand(hf: number): "safe" | "warn" | "danger" {
   return "danger";
 }
 
+// Connected wallet's token balances (mock). Keyed by lowercased address.
+// Replace with wagmi useBalance reads once wallets are wired.
+export const MOCK_WALLET_BALANCES: Record<string, number> = {
+  [ARBITRUM_TOKENS.USDC.address.toLowerCase()]: 25_000,
+  [ARBITRUM_TOKENS.WBTC.address.toLowerCase()]: 0.15,
+  [ARBITRUM_TOKENS.ETH.address.toLowerCase()]: 4.2,
+};
+
+export function walletBalanceOf(token: Token): number {
+  return MOCK_WALLET_BALANCES[token.address.toLowerCase()] ?? 0;
+}
+
 export const MOCK_BORROWER_LOANS: BorrowerLoan[] = [
   {
     id: `0x${"0".repeat(36)}b001`,

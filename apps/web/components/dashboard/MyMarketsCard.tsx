@@ -9,6 +9,7 @@ import {
   SortableHeader,
   type SortState,
 } from "@/components/ui/SortableHeader";
+import { MarketStatusModal } from "./MarketStatusModal";
 import { MOCK_LENDER_MARKETS, type LenderMarket } from "@/lib/lender";
 import type { Token } from "@/lib/tokens";
 import { formatCompact, formatPercent, formatUsd } from "@/lib/utils";
@@ -40,11 +41,10 @@ function compare(key: SortKey, a: LenderMarket, b: LenderMarket): number {
 
 export function MyMarketsCard() {
   const [markets, setMarkets] = useState<LenderMarket[]>(MOCK_LENDER_MARKETS);
-  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [statusMarket, setStatusMarket] = useState<LenderMarket | null>(null);
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
 
-  const togglePause = async (id: string) => {
-    setPendingId(id);
+  const confirmToggle = async (id: string) => {
     // Mock blockchain tx. Replace with wagmi writeContract when wired.
     await new Promise((resolve) => setTimeout(resolve, 1200));
     setMarkets((prev) =>
@@ -54,7 +54,6 @@ export function MyMarketsCard() {
           : m,
       ),
     );
-    setPendingId(null);
   };
 
   const handleSort = (key: SortKey) => setSort((prev) => nextSort(prev, key));
@@ -133,7 +132,6 @@ export function MyMarketsCard() {
               </thead>
               <tbody>
                 {sorted.map((m) => {
-                  const pending = pendingId === m.id;
                   return (
                     <tr
                       key={m.id}
@@ -177,13 +175,10 @@ export function MyMarketsCard() {
                       <td className="w-32 px-4 py-4 text-right">
                         <button
                           type="button"
-                          onClick={() => togglePause(m.id)}
-                          disabled={pending}
-                          className="inline-flex h-9 w-28 items-center justify-center gap-1.5 rounded-md border border-border bg-bg px-3 text-sm font-medium text-text-secondary transition-colors duration-base ease-out-expo hover:border-accent hover:text-text-primary disabled:pointer-events-none disabled:opacity-50"
+                          onClick={() => setStatusMarket(m)}
+                          className="inline-flex h-9 w-28 items-center justify-center gap-1.5 rounded-md border border-border bg-bg px-3 text-sm font-medium text-text-secondary transition-colors duration-base ease-out-expo hover:border-accent hover:text-text-primary"
                         >
-                          {pending ? (
-                            <span>Confirming…</span>
-                          ) : m.status === "active" ? (
+                          {m.status === "active" ? (
                             <>
                               <Pause size={14} aria-hidden="true" />
                               <span>Pause</span>
@@ -204,6 +199,13 @@ export function MyMarketsCard() {
           </div>
         </div>
       )}
+
+      <MarketStatusModal
+        market={statusMarket}
+        open={statusMarket !== null}
+        onClose={() => setStatusMarket(null)}
+        onConfirm={confirmToggle}
+      />
     </Card>
   );
 }

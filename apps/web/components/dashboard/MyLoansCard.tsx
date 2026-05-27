@@ -8,13 +8,14 @@ import {
   SortableHeader,
   type SortState,
 } from "@/components/ui/SortableHeader";
+import { RepayModal } from "./RepayModal";
 import { healthBand, type BorrowerLoan } from "@/lib/borrower";
 import type { Token } from "@/lib/tokens";
 import { formatCompact, formatPercent, formatUsd } from "@/lib/utils";
 
 interface MyLoansCardProps {
   loans: BorrowerLoan[];
-  onRepay: (id: string) => Promise<void>;
+  onRepay: (id: string, amount: number) => Promise<void>;
 }
 
 type SortKey = "collateral" | "debt" | "rate" | "health";
@@ -37,17 +38,8 @@ function compare(key: SortKey, a: BorrowerLoan, b: BorrowerLoan): number {
 }
 
 export function MyLoansCard({ loans, onRepay }: MyLoansCardProps) {
-  const [pendingId, setPendingId] = useState<string | null>(null);
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
-
-  const handleRepay = async (id: string) => {
-    setPendingId(id);
-    try {
-      await onRepay(id);
-    } finally {
-      setPendingId(null);
-    }
-  };
+  const [repayLoan, setRepayLoan] = useState<BorrowerLoan | null>(null);
 
   const handleSort = (key: SortKey) => setSort((prev) => nextSort(prev, key));
 
@@ -111,7 +103,6 @@ export function MyLoansCard({ loans, onRepay }: MyLoansCardProps) {
               </thead>
               <tbody>
                 {sorted.map((loan) => {
-                  const pending = pendingId === loan.id;
                   const debtAmount =
                     loan.principal.amount + loan.accruedInterest.amount;
                   return (
@@ -142,11 +133,10 @@ export function MyLoansCard({ loans, onRepay }: MyLoansCardProps) {
                       <td className="w-32 px-4 py-4 text-right">
                         <button
                           type="button"
-                          onClick={() => handleRepay(loan.id)}
-                          disabled={pending}
-                          className="inline-flex h-9 w-28 items-center justify-center gap-1.5 rounded-md border border-accent bg-accent/10 px-3 text-sm font-medium text-accent transition-colors duration-base ease-out-expo hover:bg-accent/20 disabled:pointer-events-none disabled:opacity-50"
+                          onClick={() => setRepayLoan(loan)}
+                          className="inline-flex h-9 w-28 items-center justify-center gap-1.5 rounded-md border border-accent bg-accent/10 px-3 text-sm font-medium text-accent transition-colors duration-base ease-out-expo hover:bg-accent/20"
                         >
-                          {pending ? "Confirming…" : "Repay"}
+                          Repay
                         </button>
                       </td>
                     </tr>
@@ -157,6 +147,13 @@ export function MyLoansCard({ loans, onRepay }: MyLoansCardProps) {
           </div>
         </div>
       )}
+
+      <RepayModal
+        loan={repayLoan}
+        open={repayLoan !== null}
+        onClose={() => setRepayLoan(null)}
+        onConfirm={onRepay}
+      />
     </Card>
   );
 }
