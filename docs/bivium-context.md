@@ -4,8 +4,10 @@
 **Etymology:** Latin *bivium*, "a place where two paths meet" (from *bi-* "two" + *via* "way/path"). The pre-pool model of lending: two parties, one meeting point, no aggregation.
 **Short tagline:** *Be your own Aave.*
 **Alternate tagline:** *Two paths. One loan. No pool.*
+**Market-structure tagline:** *Lending as an orderbook. Wallets are the makers.*
 **Long tagline:** Turn your EOA into a personal lending protocol. Your wallet is the venue. Your identity is the brand. Your terms are the law.
 **Proprietary vocabulary:** a **bivium** = a single-lender lending venue. Plural: **bivia**. "Browse bivia", "open your bivium", "borrow from cobie's bivium".
+**Orderbook vocabulary:** each bivium is also a **resting limit order** in the credit orderbook — priced by the lender's rate, sized by their wallet balance. Borrowing is a **market order** that walks the book and fills against one or many bivia atomically.
 
 ---
 
@@ -70,6 +72,17 @@ This is not an argument against Aave as a product — it's an argument against *
 - **Revocable** (it can exit the business by withdrawing funds and revoking the 7702 delegation).
 
 The name **Bivium** comes from Latin *bivium*: the place where two paths meet. It's the oldest form of lending — before banks, before pools — two parties meeting at a point to agree on a loan. Bivium reclaims that model on-chain with public identity and programmable terms.
+
+### 2.4 The dual model: lending venue *and* orderbook
+
+A bivium is two things at the same time, and which lens you use depends on who's looking:
+
+- **From the lender's side**, a bivium is a *venue*: my wallet, my terms, my collateral whitelist, my rate.
+- **From the borrower's side**, every active bivium is a **resting limit order** on the credit orderbook. The price is the lender's `ratePerSecond`. The size is the lender's live wallet balance. When the borrower borrows, they submit a **market order**: "give me X USDC against Y WBTC, max average rate Z%". A stateless router walks the book, fills greedily against the best-priced lenders, and either covers the full request honoring the slippage and health-factor bounds or reverts atomically.
+
+The two framings describe the same on-chain state. The "venue" framing is what the lender experiences day-to-day. The "orderbook" framing is what the borrower experiences when they want to borrow, and is what the indexer sees: a list of makers sorted by rate per `(loanToken, collateralToken)` pair, with each maker's available size readable from `balanceOf`. There is no matching engine on-chain — the borrower picks which makers to consume off-chain via the indexer and submits a single transaction; the router enforces the bounds.
+
+This isn't a re-architecture — it's the right lens. The code was already a one-sided orderbook (`fulfillBorrow` is literally a "fill"; the router was already designed for multi-lender atomic borrows). Naming it correctly unlocks a much cleaner UX and a much sharper pitch.
 
 ---
 
@@ -139,6 +152,15 @@ Morpho V2 introduces lending intents and fixed-term loans. This is conceptually 
 
 Traditional P2P lending requires manual matching between lender and borrower. Bivium is programmatic and instant: the lender defines its terms once, and any borrower who meets them can borrow without manual lender intervention.
 
+### 4.5 Vs orderbook DEXs (Hyperliquid, Vertex, Aevo)
+
+The closest market-structure analogue to Bivium is a one-sided spot orderbook with **best-effort liquidity** (think RFQ or OTC programmatic, not a matching engine with locked size). Differences worth being honest about up front:
+
+- **One-sided.** Only lenders post resting orders; borrowers always come as takers (market orders). No bid/ask symmetry.
+- **Size is indicative, not locked.** A maker's quoted size is `balanceOf(lender)` at quote time. Between quote and execution it can change (the lender can move funds to Pendle, etc.). The router tolerates this with a per-fill `try/catch`: a failed fill is skipped, the next-best candidate is consumed instead, and the whole tx still reverts atomically if the aggregate fails coverage, slippage, or health-factor bounds. This is the same posture as RFQ desks, not the same posture as Binance's matching engine.
+- **No on-chain matching engine.** Matching is off-chain (indexer + frontend). On-chain we just have an executor + bound checks. The lack of time-priority is a deliberate choice for v1.
+- **Lending semantics carry over.** Each fill leaves a debt position between the borrower and the specific maker, with health-factor and liquidation rules — unlike a spot orderbook where post-fill the counterparty doesn't matter.
+
 ---
 
 ## 5. The wedge over the Aave/rsETH incident
@@ -174,44 +196,45 @@ The rsETH incident is the perfect pedagogical use case for the pitch. **But fram
 
 ### 6.2 Lending engine
 
-- **Morpho Blue** as the base. For the reasons in section 4.2.
-- Each lender deploys (or references) **their own market on Morpho** with:
-  - `loanToken`: the token they lend (USDC, USDT, WETH).
-  - `collateralToken`: the collateral they accept (1 per market).
-  - `oracle`: the oracle that validates (Chainlink on mainnet, equivalent oracles on L2s).
-  - `irm`: a **custom FixedRateIRM** (factory pattern so each lender has one with a unique address).
-  - `lltv`: the LLTV chosen by the lender (within those enabled by Morpho governance).
+- **Morpho Blue (minimal fork)** as the base. For the reasons in section 4.2. We forked it because we changed the IRM model (see below) and because the auto-forward of idle supply back to the lender's EOA after every repay/liquidation is not in vanilla Morpho — it's what closes the JIT loop.
+- Each market is uniquely keyed by `(loanToken, collateralToken, oracle, ratePerSecond, lltv, creator)`. A single lender (the `creator`) can have many markets across collateral pairs and rates.
+- The rate is **inline** as `ratePerSecond` inside `MarketParams`. There is **no external IRM contract** — no factory, no per-lender IRM deployment. This was the right simplification: a lender changing rate doesn't deploy anything; the existing markets at the old rate keep running (immutable by design); new fills at the new rate create a new market on demand.
+- `oracle` and `lltv` are **curated by the Bivium owner** via `tokenConfigs[collateralToken]`, not chosen per-lender. Lenders pick the rate; the protocol picks the oracle/LLTV for each whitelisted collateral. This keeps rogue oracles out without forcing centralized governance on rates.
 
 ### 6.3 Own layer (what we build during the hackathon)
 
-**Contracts to write:**
+**Contracts (current state, all under `apps/contracts/src/`):**
 
-1. **`LenderDelegate.sol`** (core, ~200-300 lines).
-   The contract the lender's EOA delegates to via 7702. Responsibilities:
-   - Hold the lender's config (active markets, caps, optional blacklists).
-   - Function to create the market on Morpho with the params signed by the lender.
-   - `topUp(amount)` function so the lender can supply funds to the market.
-   - `withdraw(amount)` function to withdraw (Morpho guarantees only the non-lent portion can be withdrawn).
-   - `pause()` function to stop accepting new borrows.
-   - `revoke()` function to withdraw everything and deactivate.
-   - Morpho auth handling via `setAuthorization` or `setAuthorizationWithSig`.
+1. **`Bivium.sol`** (~500 lines, fork of Morpho Blue).
+   The lending engine. Supply / borrow / repay / liquidate / accrue. Two material differences vs vanilla Morpho:
+   - Inline `ratePerSecond` per market (no IRM contract).
+   - **Auto-forward**: after every `repay` and `liquidate`, idle supply is transferred to the market's `creator` EOA. This means lender capital never sits trapped in the protocol — the JIT loop closes automatically.
 
-2. **`FixedRateIRMFactory.sol` + `FixedRateIRM.sol`** (~50 lines each).
-   Factory that deploys a new FixedRateIRM for each lender that activates. This ensures every market on Morpho has a unique Id even if two lenders offer the same params (same loan/collateral/oracle/LLTV but distinct IRM = distinct market).
+2. **`BiviumProfile.sol`** (~300 lines, the ERC-7702 delegate template).
+   The contract the lender's EOA delegates to via 7702. Storage: `rates[loanToken]`, `allowedCollaterals[]`, `paused` flag. Public API: `setRate`, `setAllowedCollaterals`, `addAllowedCollateral`, `removeAllowedCollateral`, `pause`, `unpause`. The router calls `fulfillBorrow(params, amount)` on it during a borrow; the Profile validates the rate / pause state / collateral whitelist, creates the market on demand if it doesn't exist, gives a transient approve to Bivium, supplies on behalf of the lender, then resets the approve. No persistent approvals are ever issued. Funds live in the EOA between fills.
 
-3. **`LenderRegistry.sol`** (~150 lines).
-   Public registry of active lenders with their configs and stats. Enables discovery. This is what the frontend reads to show "these lenders are accepting borrows right now."
+3. **`BiviumRouter.sol`** (~150 lines, the orderbook executor).
+   Stateless entry point for borrowers. The borrow API takes a single `BorrowOrder` containing `loanToken`, `collateralToken`, `loanAmount`, `collateralAmount`, `maxAvgRatePerSecond` (slippage), `minHealthFactor` (collateral buffer), and a `BorrowFill[]` array of candidate lenders sorted by rate ascending. The router:
+   - Pre-checks the health factor against the live oracle price *before* pulling collateral.
+   - Walks the candidates in order; for each, reads `balanceOf(creator)`, takes `min(balance, remaining)`, attempts `fulfillBorrow → supplyCollateral → borrow` inside a `try/catch`. Failed fills (paused lender, stale rate, balance moved away) are skipped silently and the loop continues with the next candidate.
+   - At the end, reverts if coverage incomplete (`InsufficientLiquidity`), if the realized weighted-average rate exceeds the cap (`SlippageExceeded`), or refunds dust + zeros the allowance otherwise.
+   - Emits `Fill` per individual fill (lender-facing view) and `OrderFilled` once with the aggregate (borrower-facing view).
+   The router also exposes `repay` and `closePosition` flows (atomic multi-market repay + collateral withdraw).
 
-4. **`IntentMatcher.sol`** (optional, ~200 lines if included).
-   RFQ-style: borrowers sign intents ("I want to borrow X USDC against Y WBTC at max Z% APR"), lenders with compatible delegates auto-fulfill. This opens the hackathon's "AI agentic" category ($15K separately).
+4. **`BiviumEventEmitter.sol`** (~80 lines, centralized event surface).
+   Gated by `EXTCODEHASH` so only EOAs delegated to the canonical `BiviumProfile` template can emit. Plays the role of "lender registry" by emitting `LenderRegistered`, `RateSet`, `AllowedCollateralsSet/Added/Removed`, `MarketCreated`, `Paused`, `Unpaused`. The indexer listens to one address, not a dynamic factory-spawned set.
+
+**What we explicitly did NOT build (decisions made):**
+
+- **No `FixedRateIRMFactory` / `FixedRateIRM`.** The rate is inline; this whole layer was unnecessary.
+- **No on-chain registry contract.** The EventEmitter + the indexer cover discovery cheaper than a queryable on-chain registry.
+- **No `IntentMatcher`.** The router already does multi-fill atomic borrows. Off-chain quoting (indexer) + on-chain execution (router with slippage and HF guards) is the same shape as an intent system without the extra contract.
 
 **Frontend to build:**
 
-- Lender directory (browse by collateral, rate, LTV, identity).
-- Per-lender view (configure your LenderDelegate via 7702).
-- Borrower view (find lender, deposit collateral, borrow).
-- Active positions view (lender and borrower).
-- Ideally with ENS resolution so `jesus.eth` shows up instead of `0x...`.
+- **Borrower view**: orderbook table per `(loanToken, collateralToken)` pair sorted by rate ascending, with each row showing the lender's identity (ENS), indicative size (`balanceOf`), and rate. The borrow form is a market order: loan amount, target health factor (slider), slippage tolerance. The frontend computes `collateralAmount`, `maxAvgRatePerSecond`, and the `BorrowFill[]` depth and sends a single `BorrowOrder` to the router.
+- **Lender view**: two panels — *Open Offer* (current rate, collateral whitelist, indicative size, pause switch) and *Active Positions* (live debts owed to this lender, with health factor per borrower). It must be visually clear that pausing or changing rate **cancels the open offer** but does **not** unwind existing positions (they continue to accrue and remain liquidatable).
+- **ENS resolution** everywhere so `jesus.eth` shows instead of `0x…`.
 
 ---
 
@@ -219,23 +242,31 @@ The rsETH incident is the perfect pedagogical use case for the pitch. **But fram
 
 ### 7.1 Where do the lender's funds live?
 
-**Decision made: in Morpho Blue (custodial-by-Morpho).**
+**Decision made (reversed from the original draft): in the lender's EOA, supplied JIT (Just-In-Time) into Bivium only at the moment a borrow fires.**
 
-The alternative — "the USDC lives in the lender's EOA until lent" — would be narratively purer but isn't enforceable on-chain: an EOA with 7702 can sign normal transactions that bypass the delegate, so the lender can drain their funds at any time, even mid-borrow. The promise "these USDC are available to be borrowed" doesn't hold while funds live in a sovereign EOA.
+The original draft of this doc chose the opposite — funds custodied by Morpho Blue — because of one objection: "an EOA with 7702 can sign normal transactions that bypass the delegate, so the lender can drain their funds at any time, even mid-borrow; the promise 'these USDC are available to be borrowed' doesn't hold while funds live in a sovereign EOA." That objection is correct *technically* but resolves cleanly once we accept that **Bivium is OTC-programmatic, not pooled-guaranteed liquidity**:
 
-So: the lender's USDC goes to Morpho Blue on `topUp`. The lender's EOA is the **position owner** in Morpho, not the physical holder. The narrative adjusts to: *"Your EOA controls a vault that you control exclusively. You sign everything. If you want to exit, you withdraw and revoke."*
+- The size a lender shows in the orderbook is **indicative**, sourced from `balanceOf(lender)`. It is not locked.
+- If a lender moves their funds out between quote and execution, the specific fill against them reverts; the router's `try/catch` skips it and consumes the next candidate. Atomicity is preserved at the order level.
+- Reputation is the enforcement mechanism. A lender who repeatedly disappears burns their on-chain brand. This is the same posture as an OTC desk: the maker's credit and consistency are the product.
+
+In exchange we get the property that makes Bivium meaningful in the first place: **lender capital is never trapped**. While idle, it sits in the EOA and can be put to work elsewhere (sweeps to Pendle, yield aggregators, the lender's market-making book). When a borrow fires, the Profile pulls only the exact loan amount, supplies it to Bivium, the borrower receives it, and `auto-forward` returns repaid principal directly to the EOA on every repay. Zero idle capital in the protocol. Zero persistent approvals.
+
+The framing that resolves this in the pitch: *"Bivium is to lending what RFQ is to spot — indicative quotes, atomically enforced fills, reputation-backed liquidity. Not a pool."*
 
 ### 7.2 One market per lender or shared markets?
 
-**Decision made: 1 market per lender, via unique IRM.**
+**Decision made: 1 market per `(creator, loanToken, collateralToken, ratePerSecond)` tuple.**
 
-The IRM factory ensures that each lender, even when offering identical params to another lender, has a separate market on Morpho. Cost: deploy gas (one new IRM per lender, ~150k gas). Benefit: total isolation between lenders, and "this is YOUR market" branding.
+A single lender can have many markets simultaneously — one per loan token they offer × per collateral they accept × per rate they've offered historically. Markets are immutable: when a lender changes rate, the existing markets at the old rate keep running until repaid; new fills create a new market on demand. From the borrower's perspective each market is a distinct order. From the lender's perspective their "current offer" is the most recent rate per loan token; the older markets are legacy positions.
+
+Cost: market creation is ~50k gas, lazy (only created when first borrowed against). Benefit: total isolation between lenders + total isolation across rate changes by the same lender.
 
 ### 7.3 Fixed rate or curve?
 
-**Decision made: fixed rate to start. Simple curve optional as a variant.**
+**Decision made: fixed `ratePerSecond` inline. No IRM contract.**
 
-Simpler to implement and easier to pitch ("predictable rates, not Aave's rollercoaster"). The FixedRateIRM is 30 lines. A simple kinked curve would be 100. For the hackathon: fixed.
+The original draft proposed a `FixedRateIRMFactory` deploying one IRM per lender. We dropped it: a `uint256 ratePerSecond` field inside `MarketParams` is functionally identical at 0 deployment gas and 0 added complexity. The lender's "rate" is mutable per loan token via `Profile.setRate(token, newRate)`; existing markets keep the rate that was inlined into their `Id`. A future curve variant (kinked utilization curve, time-decaying rate) would require reintroducing an IRM contract — possible for v2, not needed for v1.
 
 ### 7.4 Permissionless or reputation-gated?
 
@@ -251,9 +282,30 @@ Morpho Blue already has an audited liquidation mechanism. External liquidators (
 
 ### 7.6 Borrower also delegated via 7702?
 
-**Decision made: borrower is a normal EOA interacting with Morpho directly.**
+**Decision made: borrower is a normal EOA interacting with Bivium directly via the Router.**
 
-The borrower deposits collateral into Alice's market (via Morpho), borrows against that collateral, repays. No delegate needed. Keeps the flow simple. A future version could introduce a BorrowerDelegate for auto-repay, auto-collateral-top-up on price drops, etc., but that's out of the initial scope.
+The borrower authorizes the Router once on Bivium (`setAuthorization`), approves the Router for the collateral token, and then can submit `BorrowOrder` market orders. No delegate needed. Keeps the flow simple. A future version could introduce a BorrowerDelegate for auto-repay, auto-collateral-top-up on price drops, etc., but that's out of the initial scope.
+
+### 7.7 Borrower-side guards: slippage and health factor
+
+**Decision made: both bounds enforced on-chain inside the Router, mirroring Uniswap-style swap protections.**
+
+The router accepts two borrower-controlled bounds on every `BorrowOrder`:
+
+- `maxAvgRatePerSecond` — the maximum *weighted-average* rate the borrower is willing to pay across all fills. Mirrors the `minAmountOut` of a spot swap. If transient liquidity disappears (a maker moves funds away, pauses, or changes rate between quote and execution), the router consumes worse-priced candidates from the depth array; if the realized weighted average exceeds the cap, the whole tx reverts.
+- `minHealthFactor` — the minimum HF the resulting position must satisfy *given the borrower's chosen collateral*. Validated against the live oracle price **before** pulling collateral, so a stale quote can't trap funds. The check is performed once at the aggregate level (not per fill): because all markets sharing the same collateral share the same `lltv` and `oracle`, and collateral is distributed proportionally across fills, per-market HF is identical to aggregate HF — one check protects all of them.
+
+These two guards together turn the router from a "trustful executor of the frontend's plan" into a "smart order router" with bounded worst-case outcomes. The frontend can ship buggy quotes and the borrower is still safe: at worst the tx reverts.
+
+Both bounds are *enforced in the contract*, not just shown in the UI, for defense-in-depth and so that integrators calling the router directly (without our frontend) get the same protection.
+
+### 7.8 Failed fills: skip vs revert?
+
+**Decision made: skip silently on `fulfillBorrow` failure, continue with the next candidate.**
+
+The router wraps only `fulfillBorrow` (the JIT supply step on the lender's Profile) in `try/catch`. If it reverts — for any reason: paused lender, rate changed between quote and execution, balance moved to Pendle, collateral newly removed from the whitelist — the router skips that candidate and tries the next one. If `fulfillBorrow` succeeds, the subsequent `supplyCollateral` and `borrow` calls are guaranteed to succeed for that fill (any revert from them would indicate a contract-level bug and must propagate).
+
+The alternative — revert the whole order on any failure — was rejected because it makes the orderbook fragile to normal lender behavior (a single paused lender in a candidates array would brick the whole borrow). The frontend just needs to pass enough depth in the array (e.g. ~10× the requested amount) so transient failures don't run out the runway.
 
 ---
 
@@ -261,18 +313,21 @@ The borrower deposits collateral into Alice's market (via Morpho), borrows again
 
 ### 8.1 Hackathon (3 weeks, May 25 – June 14, 2026)
 
+> **Note:** the bullets below are the *original* week-by-week plan from v1.1. The contract architecture shipped differently — see §6.3 for the contracts actually built (`Bivium` fork, `BiviumProfile`, `BiviumRouter`, `BiviumEventEmitter`; no `FixedRateIRMFactory`, no separate `LenderRegistry` contract).
+
 **Week 1:**
-- Repo setup (Foundry + Hardhat hybrid or Foundry only).
+- Repo setup (Foundry).
 - Deep dive on Morpho Blue. Understand the exact supply / borrow / liquidate flow.
-- Write `FixedRateIRM` + `FixedRateIRMFactory` with tests.
-- Design the `LenderDelegate` storage.
+- Fork Morpho Blue into `Bivium.sol` with inline `ratePerSecond` and auto-forward of idle supply.
+- Design the `BiviumProfile` storage (ERC-7702 delegate).
 - Frontend base setup (Next.js + viem + wagmi + shadcn).
 
 **Week 2:**
-- Write `LenderDelegate` with all core functions (config, topUp, withdraw, pause, revoke).
-- Write `LenderRegistry` with events for the indexer.
-- Integration tests: full flow lender activation → borrower borrow → repay → withdraw.
-- Frontend: lender directory view + lender configuration view.
+- Write `BiviumProfile` with all core functions (`setRate`, `setAllowedCollaterals`, `pause`, `fulfillBorrow`).
+- Write `BiviumRouter` with orderbook semantics (`BorrowOrder` with slippage + HF guards, multi-fill `try/catch`).
+- Write `BiviumEventEmitter` (centralized event surface for the indexer, gated by `EXTCODEHASH`).
+- Integration tests: full flow lender activation → borrower market-order borrow → repay → withdraw.
+- Frontend: lender orderbook view + lender configuration view.
 - Deploy to Arbitrum Sepolia.
 
 **Week 3:**
@@ -285,7 +340,7 @@ The borrower deposits collateral into Alice's market (via Morpho), borrows again
 
 ### 8.2 Post-hackathon (if it wins or we want to continue)
 
-- **Audits.** Even though Morpho Blue is audited, the LenderDelegate and the IRM are not. For real production this is blocking.
+- **Audits.** Even though Morpho Blue is audited, our `Bivium` fork, `BiviumProfile`, and `BiviumRouter` are not. For real production this is blocking.
 - **Multi-chain.** Deploy to Base, mainnet, and other L2s where Morpho Blue is present.
 - **Parallel yields.** When a lender has unlent funds (because they're waiting for borrowers), those funds sit in Morpho Blue earning 0% (they don't auto-lend to anyone). We could integrate a sweep to a yield aggregator (Yearn, etc.) so the lender earns base yield while waiting for borrowers, and auto-withdraws when demand arrives. Trickier, but an important differentiator.
 - **Reputation layer.** Integration with ERC-8004 or similar systems for reputation-gated lending.
@@ -311,7 +366,7 @@ The borrower deposits collateral into Alice's market (via Morpho), borrows again
 - **Tokenized assets:** Morpho markets are composable.
 - **ERC-7702 + ERC-7715:** Arbitrum is actively pushing them. 7715 is already live on Arbitrum.
 - **Robinhood Chain retail angle:** "lend to your followers" or "borrow from verified creators" fits their retail focus.
-- **AI agentic category** ($15K extra): if IntentMatcher is included, LenderDelegates are autonomous economic agents acting on intents.
+- **AI agentic category** ($15K extra): the BiviumProfile + Router already behave as a permissionless intent system — borrowers submit a `BorrowOrder` intent and the Router fulfills it atomically across multiple sovereign-lender Profiles, each acting as an autonomous economic agent that decides whether to fill based on its own configured rules.
 
 ### 9.3 Why it can win (not just participate)
 
@@ -326,10 +381,10 @@ The borrower deposits collateral into Alice's market (via Morpho), borrows again
 
 ### 10.1 Technical risks
 
-- **Bug in LenderDelegate.** Even though Morpho Blue is audited, the delegate is not. If the delegate has a bug, the lender loses funds. Mitigation: exhaustive tests, reentrancy guards, minimal surface area.
+- **Bug in `BiviumProfile` or `BiviumRouter`.** Even though Morpho Blue is audited, our Profile (the 7702 delegate) and Router are not. If the Profile has a bug, the lender loses funds; if the Router has a bug, the borrower loses funds. Mitigation: exhaustive tests, no persistent approvals (Profile uses only transient approves), stateless Router (zero balance invariant between calls), minimal surface area.
 - **Oracle staleness.** If the market's oracle fails, liquidations don't happen on time. Mitigation: only allow Chainlink oracles (or verified equivalents) in the initial factory.
 - **MEV on liquidations.** Inherited from Morpho — not a new problem.
-- **Gas cost per new lender.** Each lender deploys a FixedRateIRM (~150k gas) + interacts with the Morpho factory (~100k gas) + delegate setup. Total: ~$5-15 on Arbitrum depending on gas. Acceptable.
+- **Gas cost to activate as a lender.** No contract deployment per lender — the rate is inline in `MarketParams` and the Profile is a shared template the EOA delegates to via 7702. Activation is just: one 7702 delegation tx + `setRate` + `setAllowedCollaterals`. Total: well under $1 on Arbitrum. The lender's first market is created lazily on first borrow (~50k gas, paid in that tx).
 
 ### 10.2 Anticipated Q&A objections
 
@@ -359,14 +414,14 @@ The borrower deposits collateral into Alice's market (via Morpho), borrows again
 
 - Complete submission with a working demo on testnet.
 - Top 3 would be the reasonable target. Top 10 is the acceptable minimum.
-- AI agentic category ($15K extra) if IntentMatcher is included.
+- AI agentic category ($15K extra) leveraging the Profile-as-intent-fulfiller framing (each Profile is an autonomous on-chain agent that decides whether to fill a borrow intent based on its configured rules).
 
 ### 11.2 Post-hackathon
 
 - 10 active sovereign lenders on mainnet in 6 months.
 - $5M TVL in 12 months.
 - Integration with at least 1 external aggregator frontend.
-- One completed audit of the LenderDelegate before TVL >$1M.
+- One completed audit of `Bivium`, `BiviumProfile`, and `BiviumRouter` before TVL >$1M.
 
 ---
 
@@ -383,7 +438,14 @@ The borrower deposits collateral into Alice's market (via Morpho), borrows again
 - **Blast radius:** the area of damage when something goes wrong. Aggregated pool = huge blast radius. Pool-per-lender = contained blast radius.
 - **Bad debt:** debt in a protocol that cannot be repaid (typically because the collateral fell below the loan value and liquidation didn't execute in time).
 - **Risk socialization:** when losses are distributed across all participants of a pool, including those who didn't approve the exposure that caused the loss.
+- **Maker / taker:** orderbook terminology. In Bivium, lenders are *makers* posting resting offers; borrowers are *takers* placing market orders.
+- **Fill:** a single match between a taker's order and one maker's resting order. A Bivium borrow can produce multiple fills atomically.
+- **Market order:** a borrower's `BorrowOrder` walks the book greedily from the best rate up until the requested amount is covered (or reverts). Equivalent to a Uniswap-style swap.
+- **Limit order (resting):** a lender's open offer — defined by `(loanToken, allowedCollaterals[], ratePerSecond, paused?)` on their Profile, sized indicatively by `balanceOf(lender)`.
+- **Slippage (`maxAvgRatePerSecond`):** the borrower's maximum tolerated weighted-average rate. Equivalent to `minAmountOut` in spot swaps.
+- **Indicative liquidity:** size shown in the orderbook is `balanceOf(maker)` at quote time, not locked. Fills are atomically enforced — if the size isn't there at execution, the router skips and the next candidate is consumed. Same posture as RFQ desks.
+- **JIT supply (Just-In-Time):** lender capital lives in the lender's EOA; it flows into Bivium only at the moment a borrow fires, and `auto-forward` returns it on every repay. No idle capital trapped in the protocol.
 
 ---
 
-*Context document v1.1 — basis for discussions, pitch, README, and any other derived documentation. Last edited: May 2026. Official name: Bivium.*
+*Context document v1.2 — basis for discussions, pitch, README, and any other derived documentation. v1.1 → v1.2 changes: added the orderbook framing (taglines, dual model in §2.4, vs orderbook DEXs in §4.5), realigned the tech-stack sections (§6.2–6.3) to the actual contracts (`Bivium`, `BiviumProfile`, `BiviumRouter`, `BiviumEventEmitter` — no IRM factory, no LenderRegistry contract), reversed §7.1 to reflect the JIT funds model, added §7.7 (slippage and HF guards in the Router) and §7.8 (failed-fill skip semantics), updated §7.2–7.3 to inline-rate semantics, and extended the glossary with orderbook terminology. Last edited: May 2026. Official name: Bivium.*
