@@ -20,6 +20,8 @@
 		"dev:web": "pnpm --dir apps/web dev",
 		"build:web": "pnpm --dir apps/web build",
 		"start:web": "pnpm --dir apps/web start",
+		"dev:indexer": "pnpm --dir apps/indexer dev",
+		"start:indexer": "pnpm --dir apps/indexer start",
 		"prisma:generate": "turbo run prisma:generate",
 		"db:migrate": "turbo run db:migrate",
 		"db:deploy": "turbo run db:deploy",

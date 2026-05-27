@@ -61,6 +61,7 @@ bivium/
 │   ├── api/         # REST API (Express)
 │   ├── reactor/     # RabbitMQ event consumer (balance refresh, future: JIT auto-forward)
 │   ├── watcher/     # Alchemy webhook receiver — this is the "webhooks" app
+│   ├── indexer/     # Ponder event indexer — isolated bounded context, writes to `indexer` Postgres schema
 │   ├── web/         # Next.js frontend
 │   └── contracts/   # Solidity (Foundry) — Bivium Morpho-based contracts
 ├── packages/
@@ -133,6 +134,7 @@ pnpm dev                # Start all services
 pnpm dev:api            # API only
 pnpm dev:watcher        # Watcher only (webhook receiver)
 pnpm dev:reactor        # Reactor only
+pnpm dev:indexer        # Indexer only (Ponder)
 pnpm dev:web            # Web only
 pnpm build              # Build monorepo
 pnpm test               # Run tests
@@ -155,6 +157,7 @@ Each package/app has its own CLAUDE.md with detailed patterns. **Read your layer
 - `apps/watcher/CLAUDE.md` — Alchemy webhook receiver, signature verification, outbox runner
 - `apps/reactor/CLAUDE.md` — Event handlers, subscriptions, middleware composition
 - `apps/api/CLAUDE.md` — Controllers, routes, request validation
+- `apps/indexer/CLAUDE.md` — Ponder indexer (**isolated bounded context — NOT hexagonal**). Read before touching contract event indexing, the `indexer` Postgres schema, or anything in `ponder.schema.ts`. The rules in this root file (Inversify, BaseUseCase, outbox, package aliases) do NOT apply inside `apps/indexer/`.
 
 ---
 
