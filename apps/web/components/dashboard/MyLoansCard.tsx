@@ -134,7 +134,7 @@ export function MyLoansCard({ loans, onRepay }: MyLoansCardProps) {
                         <button
                           type="button"
                           onClick={() => setRepayLoan(loan)}
-                          className="inline-flex h-9 w-28 items-center justify-center gap-1.5 rounded-md border border-accent bg-accent/10 px-3 text-sm font-medium text-accent transition-colors duration-base ease-out-expo hover:bg-accent/20"
+                          className="inline-flex h-9 w-28 items-center justify-center gap-1.5 rounded-md border border-border bg-bg px-3 text-sm font-medium text-text-secondary transition-colors duration-base ease-out-expo hover:border-accent hover:text-text-primary"
                         >
                           Repay
                         </button>
