@@ -29,10 +29,11 @@ const config: Config = {
         "arb-cyan": "#14f2fc",
         "arb-white": "#ffffff",
 
-        // Semantic accents
-        success: "#34d399",
-        warn: "#fbbf24",
-        danger: "#f87171",
+        // Semantic accents — driven by CSS vars (RGB triplets) so they switch
+        // with [data-theme] and still support /10, /30 opacity modifiers.
+        success: "rgb(var(--color-success) / <alpha-value>)",
+        warn: "rgb(var(--color-warn) / <alpha-value>)",
+        danger: "rgb(var(--color-danger) / <alpha-value>)",
       },
       borderRadius: {
         sm: "var(--radius-sm)",

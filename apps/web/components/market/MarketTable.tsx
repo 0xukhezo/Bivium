@@ -1,19 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsUpDown,
-  ChevronUp,
-  Search,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { Input } from "@/components/ui/Input";
+import {
+  nextSort,
+  SortableHeader,
+  type SortState,
+} from "@/components/ui/SortableHeader";
 import { TokenFilterDropdown } from "@/components/market/TokenFilterDropdown";
 import { SUPPORTED_TOKENS, type Token } from "@/lib/tokens";
 import { MOCK_MARKETS, type Market } from "@/lib/markets";
-import { cn, formatCompact, formatPercent, formatUsd } from "@/lib/utils";
+import { formatCompact, formatPercent, formatUsd } from "@/lib/utils";
 
 const PAGE_SIZE = 10;
 
@@ -24,11 +22,6 @@ type SortKey =
   | "liquidity"
   | "borrowed"
   | "rate";
-type SortDirection = "asc" | "desc";
-interface SortState {
-  key: SortKey;
-  direction: SortDirection;
-}
 
 function compareMarkets(key: SortKey, a: Market, b: Market): number {
   switch (key) {
@@ -52,7 +45,7 @@ export function MarketTable() {
   const [selectedAddresses, setSelectedAddresses] = useState<Set<string>>(
     new Set(),
   );
-  const [sort, setSort] = useState<SortState | null>(null);
+  const [sort, setSort] = useState<SortState<SortKey> | null>(null);
   const [page, setPage] = useState(1);
 
   const toggleToken = (address: string) => {
@@ -67,11 +60,7 @@ export function MarketTable() {
   };
 
   const handleSort = (key: SortKey) => {
-    setSort((prev) => {
-      if (!prev || prev.key !== key) return { key, direction: "asc" };
-      if (prev.direction === "asc") return { key, direction: "desc" };
-      return null;
-    });
+    setSort((prev) => nextSort(prev, key));
     setPage(1);
   };
 
@@ -135,7 +124,7 @@ export function MarketTable() {
         <div className="overflow-hidden rounded-md border border-border">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-sm">
-              <thead className="border-b border-border bg-bg-sunken text-xs uppercase tracking-wider text-text-muted">
+              <thead className="border-b border-border bg-bg-sunken text-xs tracking-wider text-text-muted">
                 <tr>
                   <SortableHeader
                     label="Collateral"
@@ -248,68 +237,6 @@ export function MarketTable() {
         </div>
       ) : null}
     </>
-  );
-}
-
-interface SortableHeaderProps {
-  label: string;
-  sortKey: SortKey;
-  sort: SortState | null;
-  onSort: (key: SortKey) => void;
-  align?: "left" | "right";
-}
-
-function SortableHeader({
-  label,
-  sortKey,
-  sort,
-  onSort,
-  align = "left",
-}: SortableHeaderProps) {
-  const active = sort?.key === sortKey;
-  const direction = active ? sort?.direction : null;
-  const ariaSort: "ascending" | "descending" | "none" = active
-    ? direction === "asc"
-      ? "ascending"
-      : "descending"
-    : "none";
-
-  return (
-    <th
-      scope="col"
-      aria-sort={ariaSort}
-      className={cn(
-        "px-4 py-3 font-medium",
-        align === "right" ? "text-right" : "text-left",
-      )}
-    >
-      <button
-        type="button"
-        onClick={() => onSort(sortKey)}
-        className={cn(
-          "inline-flex items-center gap-1.5 transition-colors duration-base ease-out-expo hover:text-text-primary",
-          align === "right" && "flex-row-reverse",
-          active && "text-text-primary",
-        )}
-      >
-        <span>{label}</span>
-        {direction === "asc" ? (
-          <ChevronUp size={14} aria-hidden="true" className="text-accent" />
-        ) : direction === "desc" ? (
-          <ChevronDown
-            size={14}
-            aria-hidden="true"
-            className="text-accent"
-          />
-        ) : (
-          <ChevronsUpDown
-            size={14}
-            aria-hidden="true"
-            className="opacity-40"
-          />
-        )}
-      </button>
-    </th>
   );
 }
 

@@ -27,10 +27,12 @@
   --color-ink-100: #f0f4fb;
   --color-ink-50:  #f7f9fc;
 
-  /* Semantic accents */
-  --color-success: #34d399;
-  --color-warn:    #fbbf24;
-  --color-danger:  #f87171;
+  /* Semantic accents — RGB triplets enable Tailwind <alpha-value> substitution
+     so utilities like bg-success/10 and border-warn/30 work correctly.
+     Dark-theme values; overridden in [data-theme="light"] below. */
+  --color-success: 52 211 153;
+  --color-warn:    251 191 36;
+  --color-danger:  248 113 113;
 
   /* Radii */
   --radius-sm: 6px;
@@ -67,16 +69,22 @@
 [data-theme="light"] {
   --bg:                var(--color-arb-white);
   --bg-elevated:       var(--color-ink-100);
-  --bg-sunken:         var(--color-ink-50);
-  --border:            var(--color-ink-200);
+  --bg-sunken:         var(--color-ink-200);
+  --border:            var(--color-ink-300);
   --text-primary:      var(--color-arb-midnight);
-  --text-secondary:    var(--color-ink-700);
-  --text-muted:        var(--color-ink-500);
+  --text-secondary:    var(--color-ink-800);
+  --text-muted:        var(--color-ink-700);
   --accent:            var(--color-arb-blue);
   --accent-hover:      var(--color-arb-deep);
   --focus-ring:        var(--color-arb-cyan);
   --chart-flow:        rgba(197, 212, 240, .6);
   --chart-flow-active: var(--color-arb-blue);
+
+  /* Darker semantic accents for legible contrast on white backgrounds.
+     Tailwind palette: emerald-700, amber-700, red-700. */
+  --color-success: 4 120 87;
+  --color-warn:    180 83 9;
+  --color-danger:  185 28 28;
 }
 
 /* ── Base styles ─────────────────────────────────────────────────────── */

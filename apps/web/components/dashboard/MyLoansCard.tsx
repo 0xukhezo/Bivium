@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import {
+  nextSort,
+  SortableHeader,
+  type SortState,
+} from "@/components/ui/SortableHeader";
 import { healthBand, type BorrowerLoan } from "@/lib/borrower";
 import type { Token } from "@/lib/tokens";
 import { formatCompact, formatPercent, formatUsd } from "@/lib/utils";
@@ -12,8 +17,28 @@ interface MyLoansCardProps {
   onRepay: (id: string) => Promise<void>;
 }
 
+type SortKey = "collateral" | "debt" | "rate" | "health";
+
+function debtUsd(loan: BorrowerLoan): number {
+  return loan.principal.usd + loan.accruedInterest.usd;
+}
+
+function compare(key: SortKey, a: BorrowerLoan, b: BorrowerLoan): number {
+  switch (key) {
+    case "collateral":
+      return a.collateralPosted.usd - b.collateralPosted.usd;
+    case "debt":
+      return debtUsd(a) - debtUsd(b);
+    case "rate":
+      return a.rate - b.rate;
+    case "health":
+      return a.healthFactor - b.healthFactor;
+  }
+}
+
 export function MyLoansCard({ loans, onRepay }: MyLoansCardProps) {
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortState<SortKey> | null>(null);
 
   const handleRepay = async (id: string) => {
     setPendingId(id);
@@ -23,6 +48,14 @@ export function MyLoansCard({ loans, onRepay }: MyLoansCardProps) {
       setPendingId(null);
     }
   };
+
+  const handleSort = (key: SortKey) => setSort((prev) => nextSort(prev, key));
+
+  const sorted = useMemo(() => {
+    if (!sort) return loans;
+    const dir = sort.direction === "asc" ? 1 : -1;
+    return [...loans].sort((a, b) => compare(sort.key, a, b) * dir);
+  }, [loans, sort]);
 
   return (
     <Card>
@@ -42,31 +75,45 @@ export function MyLoansCard({ loans, onRepay }: MyLoansCardProps) {
         <div className="overflow-hidden rounded-md border border-border">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">
-              <thead className="border-b border-border bg-bg-sunken text-xs uppercase tracking-wider text-text-muted">
+              <thead className="border-b border-border bg-bg-sunken text-xs tracking-wider text-text-muted">
                 <tr>
-                  <th scope="col" className="px-4 py-3 text-left font-medium">
-                    Collateral
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-left font-medium">
-                    Debt
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-left font-medium">
-                    Rate
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-left font-medium">
-                    Health
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-right font-medium">
+                  <SortableHeader
+                    label="Collateral"
+                    sortKey="collateral"
+                    sort={sort}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="Debt"
+                    sortKey="debt"
+                    sort={sort}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="Rate"
+                    sortKey="rate"
+                    sort={sort}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="Health"
+                    sortKey="health"
+                    sort={sort}
+                    onSort={handleSort}
+                  />
+                  <th
+                    scope="col"
+                    className="w-32 px-4 py-3 text-right font-medium"
+                  >
                     Action
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {loans.map((loan) => {
+                {sorted.map((loan) => {
                   const pending = pendingId === loan.id;
                   const debtAmount =
                     loan.principal.amount + loan.accruedInterest.amount;
-                  const debtUsd = loan.principal.usd + loan.accruedInterest.usd;
                   return (
                     <tr
                       key={loan.id}
@@ -83,7 +130,7 @@ export function MyLoansCard({ loans, onRepay }: MyLoansCardProps) {
                         <AmountCell
                           token={loan.loanToken}
                           amount={debtAmount}
-                          usd={debtUsd}
+                          usd={debtUsd(loan)}
                         />
                       </td>
                       <td className="px-4 py-4 font-medium tabular-nums text-text-primary">
@@ -92,12 +139,12 @@ export function MyLoansCard({ loans, onRepay }: MyLoansCardProps) {
                       <td className="px-4 py-4">
                         <HealthBadge value={loan.healthFactor} />
                       </td>
-                      <td className="px-4 py-4 text-right">
+                      <td className="w-32 px-4 py-4 text-right">
                         <button
                           type="button"
                           onClick={() => handleRepay(loan.id)}
                           disabled={pending}
-                          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-accent bg-accent/10 px-3 text-sm font-medium text-accent transition-colors duration-base ease-out-expo hover:bg-accent/20 disabled:pointer-events-none disabled:opacity-50"
+                          className="inline-flex h-9 w-28 items-center justify-center gap-1.5 rounded-md border border-accent bg-accent/10 px-3 text-sm font-medium text-accent transition-colors duration-base ease-out-expo hover:bg-accent/20 disabled:pointer-events-none disabled:opacity-50"
                         >
                           {pending ? "Confirming…" : "Repay"}
                         </button>
@@ -148,6 +195,7 @@ function AmountCell({
 
 function HealthBadge({ value }: { value: number }) {
   const band = healthBand(value);
-  const variant = band === "safe" ? "success" : band === "warn" ? "warn" : "danger";
+  const variant =
+    band === "safe" ? "success" : band === "warn" ? "warn" : "danger";
   return <Badge variant={variant}>{value.toFixed(2)}</Badge>;
 }
