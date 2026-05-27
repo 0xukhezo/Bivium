@@ -48,3 +48,8 @@ export const MOCK_MARKETS: Market[] = Array.from({ length: 25 }, (_, i) => {
     rate: 0.015 + ((seed * 3) % 60) / 1000,
   };
 });
+
+export function getMarketById(id: string): Market | undefined {
+  const needle = id.toLowerCase();
+  return MOCK_MARKETS.find((m) => m.id.toLowerCase() === needle);
+}

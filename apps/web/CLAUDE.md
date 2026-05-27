@@ -2,7 +2,7 @@
 
 Frontend for **Bivium** — single-lender DeFi venues on Arbitrum ("be your own Aave"). A lender opens markets, sets fixed rates per asset, and chooses accepted collateral; a borrower draws loans against collateral and repays them.
 
-> **Most important fact:** the backend and smart contracts are **not wired yet**. Every value on screen comes from deterministic mocks in `lib/`. Every write action is a simulated transaction. See [Mock data](#mock-data) and [Write actions](#write-actions-mock-tx-pattern).
+> **Most important fact:** the backend and smart contracts are **mostly not wired yet**. Market/lender/borrower data comes from deterministic mocks in `lib/`, and write actions are simulated. The exception: **connected-wallet token balances are real on-chain reads** (see [Reading on-chain data](#reading-on-chain-data)). See also [Mock data](#mock-data) and [Write actions](#write-actions-mock-tx-pattern).
 
 ## Stack
 
@@ -120,7 +120,9 @@ All in `lib/`, **deterministic** (seeded by index) so SSR and client hydration m
 
 - `lib/markets.ts` → `Market`, `MOCK_MARKETS` (+ a reference price map for USD).
 - `lib/lender.ts` → `LenderMarket`, `LenderPreferences`, `MOCK_LENDER_MARKETS`, `MOCK_LENDER_PREFERENCES`, `AVAILABLE_LEND_ASSETS`, `AVAILABLE_COLLATERAL_ASSETS`.
-- `lib/borrower.ts` → `BorrowerLoan`, `MOCK_BORROWER_LOANS`, `MOCK_WALLET_BALANCES` / `walletBalanceOf`, and the **single source of health thresholds**: `HF_SAFE` (1.5), `HF_WARN` (1.2), `healthBand(hf)` → `"safe" | "warn" | "danger"`. Map the band to a Badge variant; don't scatter magic numbers.
+- `lib/borrower.ts` → `BorrowerLoan`, `MOCK_BORROWER_LOANS`, and the **single source of health thresholds**: `HF_SAFE` (1.5), `HF_WARN` (1.2), `healthBand(hf)` → `"safe" | "warn" | "danger"`. Map the band to a Badge variant; don't scatter magic numbers.
+
+> **Wallet balances are real, not mock.** Read the connected wallet's token balance with `useTokenBalance(token)` from `hooks/useTokenBalance.ts` (see [Reading on-chain data](#reading-on-chain-data)). This is the first piece of live web3 data; everything else above is still mocked.
 
 ### Write actions (mock tx pattern)
 
@@ -169,6 +171,12 @@ For free-form numeric entry (rate %, repay amount) use a **string-valued state**
 - `lib/wagmi.ts` exports `wagmiConfig` (Arbitrum + Arbitrum Sepolia + mainnet; injected / Coinbase / WalletConnect connectors). `lib/chains.ts` and `lib/ethers.ts` hold chain + provider helpers.
 - `next.config.mjs` sets web3-specific webpack `fallback`s and `externals` (`pino-pretty`, `lokijs`, `encoding`) — don't remove them or viem/ethers builds break.
 - Wallet connect UI: `ConnectButton` → `ConnectModal` (uses EIP-6963 `connector.icon` with a lucide fallback).
+
+### Reading on-chain data
+
+- **wagmi v2 here** — `useBalance` is **native-only**; read ERC-20 balances with `useReadContract` + viem's `erc20Abi` (`balanceOf`). Use the wrapper `useTokenBalance(token)` (`hooks/useTokenBalance.ts`), which returns `{ amount, raw, isLoading, isConnected }` and reads on `token.chainId` regardless of the wallet's current chain.
+- Call read hooks **unconditionally, before any early `return`** (Rules of Hooks). Guard with `query: { enabled }` and pass nullable args — `useTokenBalance(loan?.loanToken)` is safe when `loan` is null. `RepayModal` is the reference usage (shows `…` while loading, drives the MAX/insufficient-balance logic off the real balance).
+- "ETH" in the token registry is **WETH** (an ERC-20), so `useTokenBalance` reads the WETH balance — native ETH isn't special-cased yet.
 
 ## Gotchas
 

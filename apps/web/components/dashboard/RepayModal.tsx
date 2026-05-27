@@ -1,13 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { TriangleAlert } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import {
-  healthBand,
-  walletBalanceOf,
-  type BorrowerLoan,
-} from "@/lib/borrower";
+import { healthBand, type BorrowerLoan } from "@/lib/borrower";
+import { useTokenBalance } from "@/hooks/useTokenBalance";
 import { formatCompact, formatUsd } from "@/lib/utils";
 
 interface RepayModalProps {
@@ -34,12 +32,17 @@ export function RepayModal({ loan, open, onClose, onConfirm }: RepayModalProps) 
     if (open) setAmountInput("");
   }, [open, loan?.id]);
 
+  const {
+    amount: walletBalance,
+    isLoading: balanceLoading,
+    isConnected,
+  } = useTokenBalance(loan?.loanToken);
+
   if (!loan) return null;
 
   const debtAmount = loan.principal.amount + loan.accruedInterest.amount;
   const debtUsd = loan.principal.usd + loan.accruedInterest.usd;
   const pricePerToken = debtAmount > 0 ? debtUsd / debtAmount : 0;
-  const walletBalance = walletBalanceOf(loan.loanToken);
 
   const parsed = parseFloat(amountInput);
   // Can't repay more than is owed; balance shortfall is flagged separately.
@@ -58,6 +61,17 @@ export function RepayModal({ loan, open, onClose, onConfirm }: RepayModalProps) 
       : Number.POSITIVE_INFINITY;
 
   const valid = amount > 0 && !exceedsBalance;
+
+  // Heads-up whenever the repayment leaves a remaining position: either the
+  // wallet can't cover the full debt, or the user chose a partial amount.
+  const balanceKnown = isConnected && !balanceLoading;
+  const insufficientForFull = balanceKnown && walletBalance < debtAmount - 1e-9;
+  const isPartial = amount > 0 && amount < debtAmount - 1e-9;
+  const remainderNotice = insufficientForFull
+    ? "You don't have enough funds in your wallet to repay the full amount. If you proceed to repay with your current amount of funds, you will still have a small borrowing position in your dashboard."
+    : isPartial
+      ? "You're repaying only part of your debt, so a remaining borrowing position will stay open in your dashboard."
+      : null;
 
   const setAmount = (value: number) =>
     setAmountInput(String(Math.round(value * 1e8) / 1e8));
@@ -129,7 +143,7 @@ export function RepayModal({ loan, open, onClose, onConfirm }: RepayModalProps) 
         <div className="mt-2 flex items-center justify-between text-xs text-text-muted">
           <span className="tabular-nums">{formatUsd(repayUsd)}</span>
           <span className="tabular-nums">
-            Wallet balance {formatCompact(walletBalance)}
+            Wallet balance {balanceLoading ? "…" : formatCompact(walletBalance)}
             <button
               type="button"
               onClick={handleMaxWallet}
@@ -140,6 +154,17 @@ export function RepayModal({ loan, open, onClose, onConfirm }: RepayModalProps) 
           </span>
         </div>
       </div>
+
+      {remainderNotice ? (
+        <div className="mt-3 flex gap-2 rounded-md border border-warn/30 bg-warn/10 p-3 text-xs text-text-secondary">
+          <TriangleAlert
+            size={16}
+            className="mt-0.5 shrink-0 text-warn"
+            aria-hidden="true"
+          />
+          <p>{remainderNotice}</p>
+        </div>
+      ) : null}
 
       <p className="mb-2 mt-4 text-sm text-text-secondary">
         Transaction overview

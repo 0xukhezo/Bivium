@@ -22,7 +22,7 @@ const connectors = [
     ? [
         walletConnect({
           projectId: wcProjectId,
-          showQrModal: false,
+          showQrModal: true,
           metadata: {
             name: "Bivium",
             description: "Be your own Aave. Single-lender venues on Arbitrum.",

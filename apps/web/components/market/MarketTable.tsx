@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import {
@@ -41,6 +42,7 @@ function compareMarkets(key: SortKey, a: Market, b: Market): number {
 }
 
 export function MarketTable() {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [selectedAddresses, setSelectedAddresses] = useState<Set<string>>(
     new Set(),
@@ -169,7 +171,8 @@ export function MarketTable() {
                 {pagedMarkets.map((market) => (
                   <tr
                     key={market.id}
-                    className="border-b border-border transition-colors duration-base ease-out-expo last:border-b-0 hover:bg-bg-sunken/50"
+                    onClick={() => router.push(`/market/${market.id}`)}
+                    className="cursor-pointer border-b border-border transition-colors duration-base ease-out-expo last:border-b-0 hover:bg-bg-sunken/50"
                   >
                     <td className="px-4 py-4">
                       <TokenCell token={market.collateralToken} />
