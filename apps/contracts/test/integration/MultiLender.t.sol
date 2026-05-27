@@ -10,15 +10,16 @@ import {BiviumRouter} from "../../src/BiviumRouter.sol";
 import {IBiviumEventEmitter} from "../../src/interfaces/IBiviumEventEmitter.sol";
 import {IBiviumProfile} from "../../src/interfaces/IBiviumProfile.sol";
 import {IBiviumRouter} from "../../src/interfaces/IBiviumRouter.sol";
-import {Id, MarketParams, CreateMarketInput} from "../../src/interfaces/IBivium.sol";
+import {Id, MarketParams} from "../../src/interfaces/IBivium.sol";
 import {MarketParamsLib} from "../../src/libraries/MarketParamsLib.sol";
 
 import {MockERC20} from "../mocks/MockERC20.sol";
 import {MockOracle} from "../mocks/MockOracle.sol";
 
-/// @dev End-to-end Bivium suite: real `Bivium`, real `BiviumRouter`, real
-///      `BiviumProfile` template, lender EOAs delegated via ERC-7702. The test
-///      contract is the Bivium owner so it can curate the collateral token.
+/// @dev End-to-end orderbook suite for `BiviumRouter.borrow(BorrowOrder)`:
+///      real `Bivium`, real `BiviumRouter`, real `BiviumProfile` template,
+///      lender EOAs delegated via ERC-7702. The test contract is the Bivium
+///      owner so it can curate the collateral token.
 contract MultiLenderTest is Test {
     using MarketParamsLib for MarketParams;
 
@@ -32,13 +33,16 @@ contract MultiLenderTest is Test {
     MockOracle internal oracle;
 
     uint256 internal constant LLTV = 0.86e18;
+    uint256 internal constant WAD = 1e18;
     /// @dev Both tokens 18-decimals → oracle scale = 1e36 (1 collateral == 1 loan).
     uint256 internal constant ORACLE_PRICE = 1e36;
 
     uint256 internal constant PK_A = 0xA;
     uint256 internal constant PK_B = 0xB;
+    uint256 internal constant PK_C = 0xC;
     address internal lenderA;
     address internal lenderB;
+    address internal lenderC;
 
     address internal borrower = makeAddr("borrower");
 
@@ -57,6 +61,7 @@ contract MultiLenderTest is Test {
 
         lenderA = vm.addr(PK_A);
         lenderB = vm.addr(PK_B);
+        lenderC = vm.addr(PK_C);
     }
 
     // ── Helpers ──
@@ -111,245 +116,460 @@ contract MultiLenderTest is Test {
         collateralToken.approve(address(router), collateralAmount);
     }
 
-    // ── Tests ──
+    function _fill(address creator, uint256 rate) internal pure returns (IBiviumRouter.BorrowFill memory) {
+        return IBiviumRouter.BorrowFill({creator: creator, ratePerSecond: rate});
+    }
 
-    function test_borrow_revertsIfEmptyItems() public {
+    function _order(
+        uint256 loanAmount,
+        uint256 collateralAmount,
+        uint256 maxAvgRate,
+        uint256 minHF,
+        IBiviumRouter.BorrowFill[] memory candidates
+    ) internal view returns (IBiviumRouter.BorrowOrder memory) {
+        return IBiviumRouter.BorrowOrder({
+            loanToken: address(loanToken),
+            collateralToken: address(collateralToken),
+            loanAmount: loanAmount,
+            collateralAmount: collateralAmount,
+            maxAvgRatePerSecond: maxAvgRate,
+            minHealthFactor: minHF,
+            candidates: candidates
+        });
+    }
+
+    /// @dev Default health factor used in tests that don't care about the buffer.
+    function _defaultMinHF() internal pure returns (uint256) {
+        return WAD; // 1.0x — exactly at the LLTV boundary
+    }
+
+    /// @dev Generous `maxAvgRate` used in tests that don't care about slippage.
+    function _generousMaxRate() internal pure returns (uint256) {
+        return type(uint128).max;
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // Borrow — input validation
+    // ────────────────────────────────────────────────────────────
+
+    function test_borrow_revertsIfEmptyCandidates() public {
         _authorizeAndApprove(0);
 
-        IBiviumRouter.BorrowItem[] memory items = new IBiviumRouter.BorrowItem[](0);
+        IBiviumRouter.BorrowFill[] memory candidates = new IBiviumRouter.BorrowFill[](0);
+        IBiviumRouter.BorrowOrder memory order = _order(0, 0, _generousMaxRate(), _defaultMinHF(), candidates);
+
         vm.prank(borrower);
-        vm.expectRevert(IBiviumRouter.EmptyItems.selector);
-        router.borrow(items);
+        vm.expectRevert(IBiviumRouter.EmptyCandidates.selector);
+        router.borrow(order);
+    }
+
+    function test_borrow_revertsIfZeroLoanAmount() public {
+        (, MarketParams memory pA) = _setupLender(PK_A, 100, 1_000e18);
+        pA;
+
+        _authorizeAndApprove(100e18);
+        IBiviumRouter.BorrowFill[] memory candidates = new IBiviumRouter.BorrowFill[](1);
+        candidates[0] = _fill(lenderA, 100);
+        IBiviumRouter.BorrowOrder memory order = _order(0, 100e18, _generousMaxRate(), _defaultMinHF(), candidates);
+
+        vm.prank(borrower);
+        vm.expectRevert(IBiviumRouter.InconsistentInput.selector);
+        router.borrow(order);
+    }
+
+    function test_borrow_revertsIfZeroCollateralAmount() public {
+        (, MarketParams memory pA) = _setupLender(PK_A, 100, 1_000e18);
+        pA;
+
+        _authorizeAndApprove(0);
+        IBiviumRouter.BorrowFill[] memory candidates = new IBiviumRouter.BorrowFill[](1);
+        candidates[0] = _fill(lenderA, 100);
+        IBiviumRouter.BorrowOrder memory order = _order(50e18, 0, _generousMaxRate(), _defaultMinHF(), candidates);
+
+        vm.prank(borrower);
+        vm.expectRevert(IBiviumRouter.InconsistentInput.selector);
+        router.borrow(order);
+    }
+
+    function test_borrow_revertsIfUnsafeHealthFactor() public {
+        (, MarketParams memory pA) = _setupLender(PK_A, 100, 1_000e18);
+        pA;
+
+        _authorizeAndApprove(100e18);
+        IBiviumRouter.BorrowFill[] memory candidates = new IBiviumRouter.BorrowFill[](1);
+        candidates[0] = _fill(lenderA, 100);
+        // minHF < WAD (1.0) → unsafe; the contract refuses ratios under 1.0
+        IBiviumRouter.BorrowOrder memory order = _order(50e18, 100e18, _generousMaxRate(), WAD - 1, candidates);
+
+        vm.prank(borrower);
+        vm.expectRevert(IBiviumRouter.UnsafeHealthFactor.selector);
+        router.borrow(order);
+    }
+
+    function test_borrow_revertsIfUnsupportedCollateral() public {
+        // A collateral token that was never registered via `setTokenConfig`.
+        MockERC20 fakeColl = new MockERC20("FAKE", "FAKE", 18);
+        (, MarketParams memory pA) = _setupLender(PK_A, 100, 1_000e18);
+        pA;
+
+        fakeColl.mint(borrower, 1_000e18);
+        vm.prank(borrower);
+        bivium.setAuthorization(address(router), true);
+        vm.prank(borrower);
+        fakeColl.approve(address(router), 1_000e18);
+
+        IBiviumRouter.BorrowFill[] memory candidates = new IBiviumRouter.BorrowFill[](1);
+        candidates[0] = _fill(lenderA, 100);
+        IBiviumRouter.BorrowOrder memory order = IBiviumRouter.BorrowOrder({
+            loanToken: address(loanToken),
+            collateralToken: address(fakeColl),
+            loanAmount: 100e18,
+            collateralAmount: 1_000e18,
+            maxAvgRatePerSecond: _generousMaxRate(),
+            minHealthFactor: _defaultMinHF(),
+            candidates: candidates
+        });
+
+        vm.prank(borrower);
+        vm.expectRevert(IBiviumRouter.UnsupportedCollateral.selector);
+        router.borrow(order);
     }
 
     function test_borrow_revertsIfBorrowerNotAuthorized() public {
         // No setAuthorization call.
         (, MarketParams memory pA) = _setupLender(PK_A, 100, 1_000e18);
+        pA;
 
-        IBiviumRouter.BorrowItem[] memory items = new IBiviumRouter.BorrowItem[](1);
-        items[0] = IBiviumRouter.BorrowItem({params: pA, collateralAmount: 100e18, loanAmount: 50e18});
+        IBiviumRouter.BorrowFill[] memory candidates = new IBiviumRouter.BorrowFill[](1);
+        candidates[0] = _fill(lenderA, 100);
+        IBiviumRouter.BorrowOrder memory order = _order(50e18, 100e18, _generousMaxRate(), _defaultMinHF(), candidates);
 
         vm.prank(borrower);
         vm.expectRevert(IBiviumRouter.NotAuthorized.selector);
-        router.borrow(items);
+        router.borrow(order);
     }
+
+    function test_borrow_revertsIfHealthFactorTooLow() public {
+        (, MarketParams memory pA) = _setupLender(PK_A, 100, 1_000e18);
+        pA;
+
+        // LLTV = 0.86; loan == collateral with minHF = WAD ⇒ loan > 86% of value.
+        uint256 collateral = 100e18;
+        uint256 loan = 100e18;
+        _authorizeAndApprove(collateral);
+
+        IBiviumRouter.BorrowFill[] memory candidates = new IBiviumRouter.BorrowFill[](1);
+        candidates[0] = _fill(lenderA, 100);
+        IBiviumRouter.BorrowOrder memory order =
+            _order(loan, collateral, _generousMaxRate(), _defaultMinHF(), candidates);
+
+        vm.prank(borrower);
+        vm.expectRevert(IBiviumRouter.HealthFactorTooLow.selector);
+        router.borrow(order);
+    }
+
+    function test_borrow_revertsIfHealthFactorTooLowAtBuffer() public {
+        // Even though the loan would be healthy at LLTV (loan == 80% of value),
+        // requesting a 1.5x buffer (minHF = 1.5e18) tightens the cap such that
+        // the same loan now breaches the borrower's chosen safety margin.
+        (, MarketParams memory pA) = _setupLender(PK_A, 100, 1_000e18);
+        pA;
+
+        uint256 collateral = 100e18;
+        uint256 loan = 80e18; // healthy at 86% LLTV
+        _authorizeAndApprove(collateral);
+
+        IBiviumRouter.BorrowFill[] memory candidates = new IBiviumRouter.BorrowFill[](1);
+        candidates[0] = _fill(lenderA, 100);
+        IBiviumRouter.BorrowOrder memory order = _order(loan, collateral, _generousMaxRate(), 1.5e18, candidates);
+
+        vm.prank(borrower);
+        vm.expectRevert(IBiviumRouter.HealthFactorTooLow.selector);
+        router.borrow(order);
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // Borrow — happy paths
+    // ────────────────────────────────────────────────────────────
 
     function test_borrow_singleLender_happyPath() public {
         (, MarketParams memory pA) = _setupLender(PK_A, 100, 1_000e18);
+        pA;
 
         uint256 collateral = 1_000e18;
         uint256 loan = 500e18;
         _authorizeAndApprove(collateral);
 
-        IBiviumRouter.BorrowItem[] memory items = new IBiviumRouter.BorrowItem[](1);
-        items[0] = IBiviumRouter.BorrowItem({params: pA, collateralAmount: collateral, loanAmount: loan});
+        IBiviumRouter.BorrowFill[] memory candidates = new IBiviumRouter.BorrowFill[](1);
+        candidates[0] = _fill(lenderA, 100);
+        IBiviumRouter.BorrowOrder memory order =
+            _order(loan, collateral, _generousMaxRate(), _defaultMinHF(), candidates);
 
         vm.prank(borrower);
-        router.borrow(items);
+        router.borrow(order);
 
         // Borrower received the loan, gave up the collateral.
         assertEq(loanToken.balanceOf(borrower), loan, "borrower got loan");
         assertEq(collateralToken.balanceOf(borrower), 0, "borrower gave up collateral");
-        // Lender A's wallet now holds 500 less LOAN (the JIT supply moved through Bivium straight to the borrower).
+        // Lender A's wallet now holds 500 less LOAN (JIT supply flowed through Bivium to the borrower).
         assertEq(loanToken.balanceOf(lenderA), 1_000e18 - loan, "lender A wallet decreased");
-        // Bivium contract holds the collateral. No loan tokens are sitting in Bivium (JIT model).
+        // Bivium holds the collateral. JIT model: no loan tokens sit in Bivium.
         assertEq(collateralToken.balanceOf(address(bivium)), collateral, "bivium holds collateral");
         assertEq(loanToken.balanceOf(address(bivium)), 0, "bivium holds no loan");
-        // Router is stateless: zero balances in every token.
+        // Router is stateless.
         assertEq(loanToken.balanceOf(address(router)), 0, "router zero LOAN");
         assertEq(collateralToken.balanceOf(address(router)), 0, "router zero COLL");
     }
 
-    function test_borrow_multiLender_atomicSuccess() public {
-        (, MarketParams memory pA) = _setupLender(PK_A, 100, 1_000e18);
-        (, MarketParams memory pB) = _setupLender(PK_B, 200, 1_000e18);
+    function test_borrow_threeFills_weightedAvgRate() public {
+        // Three lenders at distinct rates. Each capped to 100 LOAN of balance so
+        // the Router takes exactly 100 from each.
+        // WAVG = (100*100 + 100*200 + 100*300) / 300 = 200.
+        _setupLender(PK_A, 100, 100e18);
+        _setupLender(PK_B, 200, 100e18);
+        _setupLender(PK_C, 300, 100e18);
 
-        uint256 collateralEach = 600e18;
-        uint256 loanEach = 300e18;
-        _authorizeAndApprove(collateralEach * 2);
+        uint256 collateral = 600e18;
+        uint256 loan = 300e18;
+        _authorizeAndApprove(collateral);
 
-        IBiviumRouter.BorrowItem[] memory items = new IBiviumRouter.BorrowItem[](2);
-        items[0] = IBiviumRouter.BorrowItem({params: pA, collateralAmount: collateralEach, loanAmount: loanEach});
-        items[1] = IBiviumRouter.BorrowItem({params: pB, collateralAmount: collateralEach, loanAmount: loanEach});
+        IBiviumRouter.BorrowFill[] memory candidates = new IBiviumRouter.BorrowFill[](3);
+        candidates[0] = _fill(lenderA, 100);
+        candidates[1] = _fill(lenderB, 200);
+        candidates[2] = _fill(lenderC, 300);
+        IBiviumRouter.BorrowOrder memory order =
+            _order(loan, collateral, _generousMaxRate(), _defaultMinHF(), candidates);
+
+        vm.expectEmit(true, true, true, true, address(router));
+        emit IBiviumRouter.OrderFilled(borrower, address(loanToken), address(collateralToken), loan, collateral, 200, 3);
 
         vm.prank(borrower);
-        router.borrow(items);
+        router.borrow(order);
 
-        assertEq(loanToken.balanceOf(borrower), loanEach * 2, "borrower got 2x loan");
-        assertEq(loanToken.balanceOf(lenderA), 1_000e18 - loanEach, "lender A wallet decreased");
-        assertEq(loanToken.balanceOf(lenderB), 1_000e18 - loanEach, "lender B wallet decreased");
-
-        // Each market is independent.
-        (uint128 supplyA,, uint128 borrowA,,) = bivium.market(pA.id());
-        (uint128 supplyB,, uint128 borrowB,,) = bivium.market(pB.id());
-        assertEq(supplyA, loanEach, "market A supply");
-        assertEq(supplyB, loanEach, "market B supply");
-        assertEq(borrowA, loanEach, "market A borrow");
-        assertEq(borrowB, loanEach, "market B borrow");
-
-        // Router stateless.
-        assertEq(loanToken.balanceOf(address(router)), 0);
-        assertEq(collateralToken.balanceOf(address(router)), 0);
+        // Each lender contributed 100, all balances drained.
+        assertEq(loanToken.balanceOf(lenderA), 0, "lender A drained");
+        assertEq(loanToken.balanceOf(lenderB), 0, "lender B drained");
+        assertEq(loanToken.balanceOf(lenderC), 0, "lender C drained");
+        // Borrower received the full loan.
+        assertEq(loanToken.balanceOf(borrower), loan, "borrower full loan");
     }
 
-    function test_borrow_multiLender_anyFailRevertsAll() public {
-        (, MarketParams memory pA) = _setupLender(PK_A, 100, 1_000e18);
-        // Lender B is set up with only 10 LOAN — far less than the 300 the borrower wants from them.
-        (, MarketParams memory pB) = _setupLender(PK_B, 200, 10e18);
+    function test_borrow_skipsLenderWithZeroBalance() public {
+        // Lender A has zero LOAN; the Router must skip and try lender B.
+        _setupLender(PK_A, 100, 0);
+        _setupLender(PK_B, 200, 1_000e18);
 
-        uint256 collateralEach = 600e18;
-        uint256 loanEach = 300e18;
-        _authorizeAndApprove(collateralEach * 2);
+        uint256 collateral = 500e18;
+        uint256 loan = 200e18;
+        _authorizeAndApprove(collateral);
 
-        uint256 borrowerLoanBefore = loanToken.balanceOf(borrower);
-        uint256 borrowerCollBefore = collateralToken.balanceOf(borrower);
-        uint256 lenderABefore = loanToken.balanceOf(lenderA);
+        IBiviumRouter.BorrowFill[] memory candidates = new IBiviumRouter.BorrowFill[](2);
+        candidates[0] = _fill(lenderA, 100);
+        candidates[1] = _fill(lenderB, 200);
+        IBiviumRouter.BorrowOrder memory order =
+            _order(loan, collateral, _generousMaxRate(), _defaultMinHF(), candidates);
 
-        IBiviumRouter.BorrowItem[] memory items = new IBiviumRouter.BorrowItem[](2);
-        items[0] = IBiviumRouter.BorrowItem({params: pA, collateralAmount: collateralEach, loanAmount: loanEach});
-        items[1] = IBiviumRouter.BorrowItem({params: pB, collateralAmount: collateralEach, loanAmount: loanEach});
-
-        // Item 1 (lender B) will fail when Bivium tries to pull LOAN from B.
-        // The whole tx must revert; item 0 (lender A) must have no lingering effect.
         vm.prank(borrower);
-        vm.expectRevert();
-        router.borrow(items);
+        router.borrow(order);
 
-        // No state changed anywhere.
-        assertEq(loanToken.balanceOf(borrower), borrowerLoanBefore, "borrower LOAN unchanged");
-        assertEq(collateralToken.balanceOf(borrower), borrowerCollBefore, "borrower COLL unchanged");
-        assertEq(loanToken.balanceOf(lenderA), lenderABefore, "lender A unchanged");
-        (uint128 supplyA,, uint128 borrowA,,) = bivium.market(pA.id());
-        assertEq(supplyA, 0, "market A supply unchanged");
-        assertEq(borrowA, 0, "market A borrow unchanged");
+        // Lender A untouched, lender B provided everything.
+        assertEq(loanToken.balanceOf(lenderA), 0, "A untouched");
+        assertEq(loanToken.balanceOf(lenderB), 1_000e18 - loan, "B provided loan");
+        assertEq(loanToken.balanceOf(borrower), loan, "borrower full loan");
+    }
+
+    function test_borrow_skipsPausedLender() public {
+        // Lender A pauses before the borrow → fulfillBorrow reverts → skip → lender B fills.
+        _setupLender(PK_A, 100, 1_000e18);
+        _setupLender(PK_B, 200, 1_000e18);
+
+        vm.prank(lenderA);
+        BiviumProfile(payable(lenderA)).pause();
+
+        uint256 collateral = 500e18;
+        uint256 loan = 200e18;
+        _authorizeAndApprove(collateral);
+
+        IBiviumRouter.BorrowFill[] memory candidates = new IBiviumRouter.BorrowFill[](2);
+        candidates[0] = _fill(lenderA, 100);
+        candidates[1] = _fill(lenderB, 200);
+        IBiviumRouter.BorrowOrder memory order =
+            _order(loan, collateral, _generousMaxRate(), _defaultMinHF(), candidates);
+
+        vm.prank(borrower);
+        router.borrow(order);
+
+        // Paused lender untouched, the other filled.
+        assertEq(loanToken.balanceOf(lenderA), 1_000e18, "A untouched (paused)");
+        assertEq(loanToken.balanceOf(lenderB), 1_000e18 - loan, "B filled");
+        assertEq(loanToken.balanceOf(borrower), loan, "borrower full loan");
+    }
+
+    function test_borrow_skipsRateMismatch() public {
+        // The frontend's quote for lender A says rate=100, but lender A has
+        // since changed their rate to 200. fulfillBorrow detects the mismatch
+        // and reverts → the Router skips and lender B fills.
+        _setupLender(PK_A, 100, 1_000e18);
+        _setupLender(PK_B, 300, 1_000e18);
+
+        // Lender A bumps their rate after the quote was taken.
+        vm.prank(lenderA);
+        BiviumProfile(payable(lenderA)).setRate(address(loanToken), 200);
+
+        uint256 collateral = 500e18;
+        uint256 loan = 200e18;
+        _authorizeAndApprove(collateral);
+
+        IBiviumRouter.BorrowFill[] memory candidates = new IBiviumRouter.BorrowFill[](2);
+        candidates[0] = _fill(lenderA, 100); // stale rate
+        candidates[1] = _fill(lenderB, 300);
+        IBiviumRouter.BorrowOrder memory order =
+            _order(loan, collateral, _generousMaxRate(), _defaultMinHF(), candidates);
+
+        vm.prank(borrower);
+        router.borrow(order);
+
+        assertEq(loanToken.balanceOf(lenderA), 1_000e18, "A untouched (stale rate)");
+        assertEq(loanToken.balanceOf(lenderB), 1_000e18 - loan, "B filled");
+        assertEq(loanToken.balanceOf(borrower), loan, "borrower full loan");
+    }
+
+    function test_borrow_revertsInsufficientLiquidity() public {
+        // Lender A has 50 LOAN, lender B has 50 LOAN; borrower wants 200.
+        _setupLender(PK_A, 100, 50e18);
+        _setupLender(PK_B, 200, 50e18);
+
+        uint256 collateral = 500e18;
+        uint256 loan = 200e18;
+        _authorizeAndApprove(collateral);
+
+        IBiviumRouter.BorrowFill[] memory candidates = new IBiviumRouter.BorrowFill[](2);
+        candidates[0] = _fill(lenderA, 100);
+        candidates[1] = _fill(lenderB, 200);
+        IBiviumRouter.BorrowOrder memory order =
+            _order(loan, collateral, _generousMaxRate(), _defaultMinHF(), candidates);
+
+        vm.prank(borrower);
+        vm.expectRevert(IBiviumRouter.InsufficientLiquidity.selector);
+        router.borrow(order);
+    }
+
+    function test_borrow_revertsSlippageExceeded() public {
+        // Two candidates: A at rate 100 (with 0 balance), B at rate 500 (full balance).
+        // Effective WAVG ends up = 500 because A gets skipped. maxAvgRate = 300 → revert.
+        _setupLender(PK_A, 100, 0);
+        _setupLender(PK_B, 500, 1_000e18);
+
+        uint256 collateral = 500e18;
+        uint256 loan = 200e18;
+        _authorizeAndApprove(collateral);
+
+        IBiviumRouter.BorrowFill[] memory candidates = new IBiviumRouter.BorrowFill[](2);
+        candidates[0] = _fill(lenderA, 100);
+        candidates[1] = _fill(lenderB, 500);
+        IBiviumRouter.BorrowOrder memory order = _order(loan, collateral, 300, _defaultMinHF(), candidates);
+
+        vm.prank(borrower);
+        vm.expectRevert(IBiviumRouter.SlippageExceeded.selector);
+        router.borrow(order);
     }
 
     function test_borrow_createsMarketOnFirstCall() public {
         (, MarketParams memory pA) = _setupLender(PK_A, 100, 1_000e18);
 
-        // Pre-condition: market does not exist yet (Profile creates on-demand).
+        // Pre-condition: market does not exist yet (Profile creates on demand).
         (uint128 supplyAssetsBefore,,,, uint128 lastUpdateBefore) = bivium.market(pA.id());
         assertEq(supplyAssetsBefore, 0, "market not created yet");
         assertEq(lastUpdateBefore, 0, "lastUpdate must be 0 before borrow");
 
         _authorizeAndApprove(1_000e18);
-        IBiviumRouter.BorrowItem[] memory items = new IBiviumRouter.BorrowItem[](1);
-        items[0] = IBiviumRouter.BorrowItem({params: pA, collateralAmount: 1_000e18, loanAmount: 500e18});
+
+        IBiviumRouter.BorrowFill[] memory candidates = new IBiviumRouter.BorrowFill[](1);
+        candidates[0] = _fill(lenderA, 100);
+        IBiviumRouter.BorrowOrder memory order =
+            _order(500e18, 1_000e18, _generousMaxRate(), _defaultMinHF(), candidates);
 
         vm.expectEmit(true, true, false, true, address(emitter));
-        emit IBiviumEventEmitter.MarketCreated(lenderA, Id.unwrap(pA.id()), address(loanToken), address(collateralToken), 100);
+        emit IBiviumEventEmitter.MarketCreated(
+            lenderA, Id.unwrap(pA.id()), address(loanToken), address(collateralToken), 100
+        );
 
         vm.prank(borrower);
-        router.borrow(items);
+        router.borrow(order);
 
-        // Post-condition: market exists.
         (,,,, uint128 lastUpdateAfter) = bivium.market(pA.id());
         assertGt(lastUpdateAfter, 0, "market created on demand");
     }
 
-    function test_borrow_revertsIfRateMismatch() public {
-        (, MarketParams memory pA) = _setupLender(PK_A, 100, 1_000e18);
-
-        // Borrower tries to pass a different rate from what the lender declared.
-        MarketParams memory pTampered = _params(50, lenderA);
-
-        _authorizeAndApprove(100e18);
-        IBiviumRouter.BorrowItem[] memory items = new IBiviumRouter.BorrowItem[](1);
-        items[0] = IBiviumRouter.BorrowItem({params: pTampered, collateralAmount: 100e18, loanAmount: 50e18});
-
-        vm.prank(borrower);
-        vm.expectRevert(abi.encodeWithSelector(IBiviumProfile.RateMismatch.selector, uint256(50), uint256(100)));
-        router.borrow(items);
-        pA; // silence unused
-    }
-
-    function test_borrow_revertsIfCollateralInsufficientForLtv() public {
-        (, MarketParams memory pA) = _setupLender(PK_A, 100, 1_000e18);
-
-        // LLTV is 0.86; loan == collateral makes the position unhealthy
-        // (max_borrow = collateral * 0.86 < loan).
-        uint256 collateral = 100e18;
-        uint256 loan = 100e18;
-        _authorizeAndApprove(collateral);
-
-        IBiviumRouter.BorrowItem[] memory items = new IBiviumRouter.BorrowItem[](1);
-        items[0] = IBiviumRouter.BorrowItem({params: pA, collateralAmount: collateral, loanAmount: loan});
-
-        vm.prank(borrower);
-        vm.expectRevert(bytes("insufficient collateral"));
-        router.borrow(items);
-    }
-
-    function test_repay_routesAutoForwardBackToLender() public {
-        // rate=1 (rate==0 means "loan token deactivated"); negligible interest
-        // in same-block borrow→repay.
-        (, MarketParams memory pA) = _setupLender(PK_A, 1, 1_000e18);
-
-        uint256 collateral = 1_000e18;
-        uint256 loan = 500e18;
-        _authorizeAndApprove(collateral);
-
-        IBiviumRouter.BorrowItem[] memory items = new IBiviumRouter.BorrowItem[](1);
-        items[0] = IBiviumRouter.BorrowItem({params: pA, collateralAmount: collateral, loanAmount: loan});
-
-        vm.prank(borrower);
-        router.borrow(items);
-
-        // Lender A is now down `loan`. Borrower repays the full amount.
-        uint256 lenderABefore = loanToken.balanceOf(lenderA);
-
-        vm.startPrank(borrower);
-        loanToken.approve(address(bivium), loan);
-        bivium.repay(pA, loan, 0, borrower, "");
-        vm.stopPrank();
-
-        // The auto-forward should have routed the full `loan` back to lender A's wallet,
-        // restoring their original balance.
-        assertEq(loanToken.balanceOf(lenderA) - lenderABefore, loan, "lender received repayment");
-        // And the market is drained of supply (JIT model).
-        (uint128 supplyA,, uint128 borrowA,,) = bivium.market(pA.id());
-        assertEq(borrowA, 0, "borrow cleared");
-        assertEq(supplyA, 0, "supply drained by auto-forward");
-    }
-
-    function test_borrow_routerHoldsZeroBalanceAfterEveryCall() public {
-        (, MarketParams memory pA) = _setupLender(PK_A, 100, 1_000e18);
-        (, MarketParams memory pB) = _setupLender(PK_B, 200, 1_000e18);
+    function test_borrow_routerStatelessAfterCall() public {
+        _setupLender(PK_A, 100, 1_000e18);
+        _setupLender(PK_B, 200, 1_000e18);
 
         _authorizeAndApprove(1_200e18);
 
-        IBiviumRouter.BorrowItem[] memory items = new IBiviumRouter.BorrowItem[](2);
-        items[0] = IBiviumRouter.BorrowItem({params: pA, collateralAmount: 600e18, loanAmount: 300e18});
-        items[1] = IBiviumRouter.BorrowItem({params: pB, collateralAmount: 600e18, loanAmount: 300e18});
+        IBiviumRouter.BorrowFill[] memory candidates = new IBiviumRouter.BorrowFill[](2);
+        candidates[0] = _fill(lenderA, 100);
+        candidates[1] = _fill(lenderB, 200);
+        IBiviumRouter.BorrowOrder memory order =
+            _order(600e18, 1_200e18, _generousMaxRate(), _defaultMinHF(), candidates);
 
         vm.prank(borrower);
-        router.borrow(items);
+        router.borrow(order);
 
-        // Invariant: stateless Router → zero balance in every token after success.
+        // Invariant: stateless Router → zero balance and zero allowance after success.
         assertEq(loanToken.balanceOf(address(router)), 0, "router LOAN");
         assertEq(collateralToken.balanceOf(address(router)), 0, "router COLL");
-        // Allowance the Router gave to Bivium can stay; supplyCollateral pulled exactly the amount we approved.
         assertEq(collateralToken.allowance(address(router), address(bivium)), 0, "router allowance reset");
     }
 
-    // ── Repay tests ──
+    function test_borrow_emitsFillPerLender() public {
+        // Cap lender A's balance to 100 so the Router fills exactly 100 from A
+        // and the remaining 100 from B.
+        _setupLender(PK_A, 100, 100e18);
+        _setupLender(PK_B, 200, 1_000e18);
 
-    /// @dev Opens a single-lender position with `pk` lender at rate 0 (so debt
-    ///      stays exactly equal to principal). Returns the canonical params.
+        uint256 collateral = 400e18;
+        uint256 loan = 200e18;
+        _authorizeAndApprove(collateral);
+
+        IBiviumRouter.BorrowFill[] memory candidates = new IBiviumRouter.BorrowFill[](2);
+        candidates[0] = _fill(lenderA, 100);
+        candidates[1] = _fill(lenderB, 200);
+        IBiviumRouter.BorrowOrder memory order =
+            _order(loan, collateral, _generousMaxRate(), _defaultMinHF(), candidates);
+
+        vm.expectEmit(true, true, false, true, address(router));
+        emit IBiviumRouter.Fill(borrower, lenderA, address(loanToken), 100e18, 100);
+        vm.expectEmit(true, true, false, true, address(router));
+        emit IBiviumRouter.Fill(borrower, lenderB, address(loanToken), 100e18, 200);
+
+        vm.prank(borrower);
+        router.borrow(order);
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // Repay tests — `_openPosition` rebuilt on the BorrowOrder API
+    // ────────────────────────────────────────────────────────────
+
+    /// @dev Opens a single-lender position with `pk` lender at rate 1 (so debt
+    ///      stays nearly equal to principal in the same block). Returns the
+    ///      canonical params.
     function _openPosition(uint256 pk, uint256 collateralAmount, uint256 loanAmount)
         internal
         returns (MarketParams memory params)
     {
-        // rate=1 (rate==0 means "loan token deactivated"). Same-block tests
-        // accrue negligible interest.
-        (, params) = _setupLender(pk, 1, loanAmount);
+        (address lender, MarketParams memory p) = _setupLender(pk, 1, loanAmount);
+        params = p;
 
         _authorizeAndApprove(collateralAmount);
 
-        IBiviumRouter.BorrowItem[] memory items = new IBiviumRouter.BorrowItem[](1);
-        items[0] = IBiviumRouter.BorrowItem({params: params, collateralAmount: collateralAmount, loanAmount: loanAmount});
+        IBiviumRouter.BorrowFill[] memory candidates = new IBiviumRouter.BorrowFill[](1);
+        candidates[0] = _fill(lender, 1);
+        IBiviumRouter.BorrowOrder memory order =
+            _order(loanAmount, collateralAmount, _generousMaxRate(), _defaultMinHF(), candidates);
+
         vm.prank(borrower);
-        router.borrow(items);
+        router.borrow(order);
     }
 
     function test_repay_revertsIfEmptyItems() public {
@@ -395,7 +615,6 @@ contract MultiLenderTest is Test {
     function test_repay_assetsMode_singleMarket() public {
         MarketParams memory pA = _openPosition(PK_A, 1_000e18, 500e18);
 
-        // Approve the Router for the repay amount.
         vm.prank(borrower);
         loanToken.approve(address(router), 500e18);
 
@@ -407,28 +626,21 @@ contract MultiLenderTest is Test {
         vm.prank(borrower);
         router.repay(items);
 
-        // Debt cleared, auto-forward delivered the repayment to lender A.
         (uint128 supplyA,, uint128 borrowA,,) = bivium.market(pA.id());
         assertEq(borrowA, 0, "no debt");
         assertEq(supplyA, 0, "supply drained by auto-forward");
         assertEq(loanToken.balanceOf(lenderA) - lenderABefore, 500e18, "lender A received");
 
-        // Router invariants.
         assertEq(loanToken.balanceOf(address(router)), 0, "router LOAN");
         assertEq(loanToken.allowance(address(router), address(bivium)), 0, "router-bivium allowance");
     }
 
     function test_repay_sharesMode_refundsResidual() public {
-        // Open a position. Then in shares-mode the borrower asks to repay their
-        // full share balance with a `maxAssetsIn` that overshoots the real cost;
-        // the Router must refund the excess to the borrower.
         MarketParams memory pA = _openPosition(PK_A, 1_000e18, 500e18);
 
-        (uint256 supplyShares, uint128 borrowShares,) = bivium.position(pA.id(), borrower);
-        supplyShares; // silence unused warning
+        (, uint128 borrowShares,) = bivium.position(pA.id(), borrower);
         assertGt(borrowShares, 0, "has debt");
 
-        // Top-up the borrower with extra LOAN so they can pre-fund `maxAssetsIn`.
         uint256 overshoot = 100e18;
         loanToken.mint(borrower, overshoot);
         uint256 maxIn = 500e18 + overshoot;
@@ -445,37 +657,34 @@ contract MultiLenderTest is Test {
         vm.prank(borrower);
         router.repay(items);
 
-        // Borrower's balance change == -(actual repaid), not -maxIn. Refund worked.
         uint256 borrowerNet = borrowerBefore - loanToken.balanceOf(borrower);
-        // With rate 0, actual repaid should be ≈ 500e18 (within +1 rounding).
         assertApproxEqAbs(borrowerNet, 500e18, 1, "borrower paid only the actual debt");
-
-        // Lender received the actual repay amount.
         assertApproxEqAbs(loanToken.balanceOf(lenderA) - lenderABefore, 500e18, 1, "lender A received");
 
-        // Debt cleared.
         (uint128 supplyA,, uint128 borrowA,,) = bivium.market(pA.id());
         assertEq(borrowA, 0, "no debt");
         assertEq(supplyA, 0, "supply drained by auto-forward");
 
-        // Router stateless.
         assertEq(loanToken.balanceOf(address(router)), 0, "router LOAN");
         assertEq(loanToken.allowance(address(router), address(bivium)), 0, "router-bivium allowance");
     }
 
     function test_repay_multiMarket_atomic() public {
         MarketParams memory pA = _openPosition(PK_A, 600e18, 300e18);
-        // Open a second position WITHOUT going through `_openPosition` (which
-        // re-runs the borrower setup); inline the second borrow instead.
+
+        // Open a second position with lender B without re-running the full setup helper.
         (, MarketParams memory pB) = _setupLender(PK_B, 1, 300e18);
         collateralToken.mint(borrower, 600e18);
         vm.prank(borrower);
         collateralToken.approve(address(router), 600e18);
 
-        IBiviumRouter.BorrowItem[] memory borrowItems = new IBiviumRouter.BorrowItem[](1);
-        borrowItems[0] = IBiviumRouter.BorrowItem({params: pB, collateralAmount: 600e18, loanAmount: 300e18});
+        IBiviumRouter.BorrowFill[] memory candidatesB = new IBiviumRouter.BorrowFill[](1);
+        candidatesB[0] = _fill(lenderB, 1);
+        IBiviumRouter.BorrowOrder memory orderB =
+            _order(300e18, 600e18, _generousMaxRate(), _defaultMinHF(), candidatesB);
+
         vm.prank(borrower);
-        router.borrow(borrowItems);
+        router.borrow(orderB);
 
         // Now repay both atomically.
         vm.prank(borrower);
@@ -494,15 +703,17 @@ contract MultiLenderTest is Test {
         assertEq(loanToken.balanceOf(lenderA) - lenderABefore, 300e18, "lender A repaid");
         assertEq(loanToken.balanceOf(lenderB) - lenderBBefore, 300e18, "lender B repaid");
 
-        (, , uint128 borrowA,,) = bivium.market(pA.id());
-        (, , uint128 borrowB,,) = bivium.market(pB.id());
+        (,, uint128 borrowA,,) = bivium.market(pA.id());
+        (,, uint128 borrowB,,) = bivium.market(pB.id());
         assertEq(borrowA, 0, "market A cleared");
         assertEq(borrowB, 0, "market B cleared");
 
         assertEq(loanToken.balanceOf(address(router)), 0, "router LOAN");
     }
 
-    // ── closePosition tests ──
+    // ────────────────────────────────────────────────────────────
+    // closePosition tests
+    // ────────────────────────────────────────────────────────────
 
     function test_closePosition_revertsIfEmptyItems() public {
         IBiviumRouter.ClosePositionItem[] memory items = new IBiviumRouter.ClosePositionItem[](0);
@@ -512,16 +723,11 @@ contract MultiLenderTest is Test {
     }
 
     function test_closePosition_revertsIfNotAuthorized() public {
-        // We deliberately do NOT call setAuthorization here.
         (, MarketParams memory pA) = _setupLender(PK_A, 100, 1_000e18);
 
         IBiviumRouter.ClosePositionItem[] memory items = new IBiviumRouter.ClosePositionItem[](1);
         items[0] = IBiviumRouter.ClosePositionItem({
-            params: pA,
-            assets: 1e18,
-            shares: 0,
-            maxAssetsIn: 0,
-            collateralAmount: 1e18
+            params: pA, assets: 1e18, shares: 0, maxAssetsIn: 0, collateralAmount: 1e18
         });
 
         vm.prank(borrower);
@@ -539,25 +745,18 @@ contract MultiLenderTest is Test {
 
         IBiviumRouter.ClosePositionItem[] memory items = new IBiviumRouter.ClosePositionItem[](1);
         items[0] = IBiviumRouter.ClosePositionItem({
-            params: pA,
-            assets: 500e18,
-            shares: 0,
-            maxAssetsIn: 0,
-            collateralAmount: 1_000e18
+            params: pA, assets: 500e18, shares: 0, maxAssetsIn: 0, collateralAmount: 1_000e18
         });
 
         vm.prank(borrower);
         router.closePosition(items);
 
-        // Debt cleared, collateral returned, lender repaid.
-        (uint256 supplyShares, uint128 borrowShares, uint128 collateral) = bivium.position(pA.id(), borrower);
-        supplyShares;
+        (, uint128 borrowShares, uint128 collateral) = bivium.position(pA.id(), borrower);
         assertEq(borrowShares, 0, "no debt");
         assertEq(collateral, 0, "no collateral in market");
         assertEq(collateralToken.balanceOf(borrower), 1_000e18, "borrower got collateral back");
         assertEq(loanToken.balanceOf(lenderA) - lenderABefore, 500e18, "lender A received");
 
-        // Router invariants.
         assertEq(loanToken.balanceOf(address(router)), 0, "router LOAN");
         assertEq(collateralToken.balanceOf(address(router)), 0, "router COLL");
     }
@@ -567,7 +766,6 @@ contract MultiLenderTest is Test {
 
         (, uint128 borrowShares,) = bivium.position(pA.id(), borrower);
 
-        // Pre-fund the borrower for a generous maxAssetsIn.
         uint256 maxIn = 600e18;
         loanToken.mint(borrower, 100e18);
         vm.prank(borrower);
@@ -578,27 +776,18 @@ contract MultiLenderTest is Test {
 
         IBiviumRouter.ClosePositionItem[] memory items = new IBiviumRouter.ClosePositionItem[](1);
         items[0] = IBiviumRouter.ClosePositionItem({
-            params: pA,
-            assets: 0,
-            shares: borrowShares,
-            maxAssetsIn: maxIn,
-            collateralAmount: 1_000e18
+            params: pA, assets: 0, shares: borrowShares, maxAssetsIn: maxIn, collateralAmount: 1_000e18
         });
 
         vm.prank(borrower);
         router.closePosition(items);
 
-        // Borrower's net loan-token spent equals the actual repay (with refund).
         uint256 borrowerNet = borrowerLoanBefore - loanToken.balanceOf(borrower);
         assertApproxEqAbs(borrowerNet, 500e18, 1, "borrower paid only actual debt");
 
-        // Collateral returned.
         assertEq(collateralToken.balanceOf(borrower), 1_000e18, "borrower got collateral back");
-
-        // Lender received funds.
         assertApproxEqAbs(loanToken.balanceOf(lenderA) - lenderABefore, 500e18, 1, "lender A received");
 
-        // Router stateless.
         assertEq(loanToken.balanceOf(address(router)), 0, "router LOAN");
         assertEq(collateralToken.balanceOf(address(router)), 0, "router COLL");
     }
