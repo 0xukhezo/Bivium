@@ -5,7 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { LenderOrderbook } from "@/components/market/LenderOrderbook";
 import { MarketDetailActions } from "@/components/market/MarketDetailActions";
-import { getMarketById, type Market } from "@/lib/markets";
+import { getMarketByPair, type Market } from "@/lib/markets";
 import {
   formatCompact,
   formatPercent,
@@ -14,11 +14,11 @@ import {
 } from "@/lib/utils";
 
 interface PageProps {
-  params: { id: string };
+  params: { pair: string };
 }
 
 export function generateMetadata({ params }: PageProps): Metadata {
-  const market = getMarketById(params.id);
+  const market = getMarketByPair(params.pair);
   return {
     title: market
       ? `${market.collateralToken.symbol} / ${market.loanToken.symbol} · Bivium`
@@ -27,7 +27,7 @@ export function generateMetadata({ params }: PageProps): Metadata {
 }
 
 export default function MarketDetailPage({ params }: PageProps) {
-  const market = getMarketById(params.id);
+  const market = getMarketByPair(params.pair);
   if (!market) notFound();
 
   const { collateralToken, loanToken } = market;

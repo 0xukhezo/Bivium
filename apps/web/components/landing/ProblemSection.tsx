@@ -7,7 +7,15 @@ import { SectionEyebrow } from "./SectionEyebrow";
  */
 export function ProblemSection() {
   return (
-    <section className="relative overflow-hidden border-t border-border bg-bg-sunken">
+    <section
+      className="relative overflow-hidden"
+      style={{
+        // Feathered sunken band — fades in from the surrounding bg at the top,
+        // holds bg-sunken through the body, and fades back out at the bottom.
+        background:
+          "linear-gradient(to bottom, var(--bg) 0%, var(--bg-sunken) 14%, var(--bg-sunken) 86%, var(--bg) 100%)",
+      }}
+    >
       <div className="mx-auto max-w-7xl px-6 py-28 lg:px-12 lg:py-32">
         <div className="grid gap-12 lg:grid-cols-[1fr_1.25fr] lg:gap-20">
           <div className="lg:sticky lg:top-24 lg:self-start">
@@ -43,22 +51,18 @@ export function ProblemSection() {
               value="$15.1B"
               valueLabel="TVL fled Aave"
               body="Inside 72 hours, depositors raced to withdraw across every pool, accelerating the spiral."
-              tone="danger"
             />
             <TimelineRow
               t="24h"
               value="100%"
               valueLabel="WETH utilization"
               body="The WETH pool was drawn to the cap. Liquidators had no liquidity to repay the bad positions, so liquidations stalled."
-              tone="warn"
             />
             <TimelineRow
               t="96h"
               value="$123–230M"
               valueLabel="Bad debt left behind"
               body="Once dust settled, real WETH lenders were holding the loss — not whoever signed the risk framework that allowed rsETH in the first place."
-              tone="muted"
-              last
             />
           </ol>
         </div>
@@ -72,23 +76,12 @@ function TimelineRow({
   value,
   valueLabel,
   body,
-  tone,
-  last,
 }: {
   t: string;
   value: string;
   valueLabel: string;
   body: string;
-  tone: "danger" | "warn" | "muted";
-  last?: boolean;
 }) {
-  const dotColor =
-    tone === "danger"
-      ? "bg-danger"
-      : tone === "warn"
-        ? "bg-warn"
-        : "bg-text-muted";
-
   return (
     <li className="relative pl-8">
       <div className="flex items-baseline gap-3 font-mono text-[11px] uppercase tracking-[0.22em] text-text-muted">

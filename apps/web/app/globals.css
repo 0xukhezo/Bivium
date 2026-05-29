@@ -111,9 +111,16 @@
   html, body {
     background: var(--bg);
     color: var(--text-primary);
-    font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Display face — Manrope — for all heading levels by default. Components
+     can override with `font-sans` if they want body face inside a heading. */
+  h1, h2, h3, h4 {
+    font-family: var(--font-manrope), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.01em;
   }
 
   /* Tabular numerals are mandatory anywhere we render token amounts. */

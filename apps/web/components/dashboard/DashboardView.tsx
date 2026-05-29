@@ -28,13 +28,14 @@ export function DashboardView() {
   // Lender content is only meaningful once the EOA delegates to the Profile.
   // When the template address isn't configured we fall through to the regular
   // lender content so dev can still iterate locally without 7702 set up.
-  const needsActivation = connected && view === "lender" && !!profileAddress && !isDelegated;
+  const needsActivation =
+    connected && view === "lender" && !!profileAddress && !isDelegated;
 
   return (
     <>
       <header className="mb-6">
         <h1 className="text-3xl font-semibold text-text-primary">Dashboard</h1>
-        <h2 className="mt-2 max-w-xl text-text-secondary">
+        <h2 className="mt-2 max-w-2xl text-text-secondary">
           {!connected
             ? "Connect your wallet to manage your markets, lending preferences, and loans."
             : view === "lender"

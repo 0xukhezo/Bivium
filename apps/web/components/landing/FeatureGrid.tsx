@@ -41,7 +41,14 @@ const features = [
 
 export function FeatureGrid() {
   return (
-    <section id="how" className="border-t border-border bg-bg-sunken">
+    <section
+      id="how"
+      className="relative"
+      style={{
+        background:
+          "linear-gradient(to bottom, var(--bg) 0%, var(--bg-sunken) 14%, var(--bg-sunken) 86%, var(--bg) 100%)",
+      }}
+    >
       <div className="mx-auto max-w-7xl px-6 py-28 lg:px-12 lg:py-32">
         <div className="grid items-end gap-8 lg:grid-cols-[1.05fr_1fr]">
           <div>

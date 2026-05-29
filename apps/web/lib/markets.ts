@@ -53,9 +53,10 @@ const MOCK_ORACLE: `0x${string}` = `0x${"0".repeat(40)}` as `0x${string}`;
 
 const NOW = Math.floor(Date.now() / 1000);
 
-// Deterministic mock so SSR and hydration stay consistent.
-export const MOCK_MARKETS: Market[] = Array.from({ length: 25 }, (_, i) => {
-  const [collateral, loan] = TOKEN_PAIRS[i % TOKEN_PAIRS.length];
+// Deterministic mock — one market per unique (collateral, loan) pair so the
+// URL slug (collateral-loan) is unambiguous. Pair repetition arrives later
+// when LLTV variants ship and the slug grows an LLTV bucket.
+export const MOCK_MARKETS: Market[] = TOKEN_PAIRS.map(([collateral, loan], i) => {
   const seed = (i * 37 + 11) % 100;
   const loanPrice = PRICES_USD[loan.symbol] ?? 1;
   const liqUsd = (100 + seed * 14) * 1_000_000;
@@ -64,8 +65,7 @@ export const MOCK_MARKETS: Market[] = Array.from({ length: 25 }, (_, i) => {
   const idSuffix = i.toString(16).padStart(4, "0");
   // Creator address shares the index so MyMarketsCard's mock filter can
   // tomorrow filter by `markets.creator = currentLender`.
-  const creator =
-    `0x${"c".repeat(36)}${idSuffix}` as `0x${string}`;
+  const creator = `0x${"c".repeat(36)}${idSuffix}` as `0x${string}`;
   const supplyAmount = liqUsd / loanPrice;
   const borrowAmount = borrowUsd / loanPrice;
 
@@ -88,4 +88,21 @@ export const MOCK_MARKETS: Market[] = Array.from({ length: 25 }, (_, i) => {
 export function getMarketById(id: string): Market | undefined {
   const needle = id.toLowerCase();
   return MOCK_MARKETS.find((m) => m.id.toLowerCase() === needle);
+}
+
+/** URL slug for a market: `collateralSymbol-loanSymbol`, lowercased. Since
+ *  pairs are unique today (one market per (collateral, loan)), the slug is a
+ *  stable, human-readable identifier. If LLTV variants ship later, grow this
+ *  to `collateral-loan-<lltvBps>` and update `getMarketByPair`. */
+export function getMarketSlug(market: Market): string {
+  return `${market.collateralToken.symbol}-${market.loanToken.symbol}`.toLowerCase();
+}
+
+export function getMarketByPair(pair: string): Market | undefined {
+  const needle = pair.toLowerCase();
+  return MOCK_MARKETS.find(
+    (m) =>
+      `${m.collateralToken.symbol}-${m.loanToken.symbol}`.toLowerCase() ===
+      needle,
+  );
 }

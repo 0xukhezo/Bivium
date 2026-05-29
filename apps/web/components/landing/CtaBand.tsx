@@ -3,7 +3,13 @@ import { SectionEyebrow } from "./SectionEyebrow";
 
 export function CtaBand() {
   return (
-    <section className="relative overflow-hidden border-t border-border bg-blueprint">
+    <section className="bg-blueprint relative overflow-hidden">
+      {/* Feather the top edge so the blueprint texture fades in from the
+          previous section rather than cutting in with a hard line. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-bg to-transparent"
+      />
       <div className="mx-auto max-w-5xl px-6 py-28 lg:px-12 lg:py-32">
         <div className="flex flex-col items-center text-center">
           <SectionEyebrow number="04" label="Begin" />

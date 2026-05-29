@@ -6,10 +6,13 @@ import { SectionEyebrow } from "./SectionEyebrow";
  */
 export function PrimitiveSection() {
   return (
-    <section
-      id="primitive"
-      className="relative border-t border-border"
-    >
+    <section id="primitive" className="relative overflow-hidden">
+      {/* Soft ambient highlight at the section center — gives the canvas
+          some life without a hard border. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-1/3 -z-10 mx-auto h-[480px] max-w-5xl bg-[radial-gradient(ellipse_at_center,_var(--color-arb-cyan)_0%,_transparent_60%)] opacity-[0.06]"
+      />
       <div className="mx-auto max-w-7xl px-6 py-28 lg:px-12 lg:py-32">
         <div className="grid gap-16 lg:grid-cols-[1fr_1.05fr] lg:items-start lg:gap-24">
           <div>

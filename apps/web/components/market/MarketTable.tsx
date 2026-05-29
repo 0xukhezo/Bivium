@@ -11,10 +11,10 @@ import {
 } from "@/components/ui/SortableHeader";
 import { TokenFilterDropdown } from "@/components/market/TokenFilterDropdown";
 import { SUPPORTED_TOKENS, type Token } from "@/lib/tokens";
-import { MOCK_MARKETS, type Market } from "@/lib/markets";
+import { MOCK_MARKETS, getMarketSlug, type Market } from "@/lib/markets";
 import { formatCompact, formatPercent, formatUsd } from "@/lib/utils";
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 9;
 
 type SortKey =
   | "collateral"
@@ -171,8 +171,8 @@ export function MarketTable() {
                 {pagedMarkets.map((market) => (
                   <tr
                     key={market.id}
-                    onClick={() => router.push(`/market/${market.id}`)}
-                    className="cursor-pointer border-b border-border transition-colors duration-base ease-out-expo last:border-b-0 hover:bg-bg-sunken/50"
+                    onClick={() => router.push(`/market/${getMarketSlug(market)}`)}
+                    className="group cursor-pointer border-b border-border transition-[background,box-shadow] duration-base ease-out-expo last:border-b-0 hover:bg-bg-elevated hover:shadow-[inset_3px_0_0_0_var(--color-arb-cyan)]"
                   >
                     <td className="px-4 py-4">
                       <TokenCell token={market.collateralToken} />

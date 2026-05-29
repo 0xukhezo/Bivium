@@ -80,7 +80,7 @@ export function BorrowFlowSankey({ fills, loanToken }: BorrowFlowSankeyProps) {
           boxShadow: "var(--shadow-card)",
         }}
       >
-        <span style={{ fontFamily: "var(--font-geist-mono), monospace" }}>
+        <span style={{ fontFamily: "var(--font-jetbrains), monospace" }}>
           {truncateAddress(sourceId)}
         </span>
         {" lending "}

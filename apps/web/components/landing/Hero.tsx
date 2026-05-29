@@ -26,9 +26,9 @@ export function Hero() {
           </div>
 
           <h1 className="mt-8 max-w-2xl text-balance text-[clamp(2.75rem,6vw,4.5rem)] font-semibold leading-[1.02] tracking-[-0.02em] text-text-primary">
-            Be your own{" "}
+            Lend on{" "}
             <span className="relative inline-block">
-              <span className="relative z-10 text-accent">Aave</span>
+              <span className="relative z-10 text-accent">your terms</span>
               <span
                 aria-hidden
                 className="absolute -bottom-1 left-0 right-0 h-[6px] rounded-full bg-accent/30 blur-[2px]"

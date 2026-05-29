@@ -16,7 +16,7 @@ export default function LandingPage() {
         <FeatureGrid />
         <CtaBand />
       </main>
-      <footer className="relative border-t border-border">
+      <footer className="relative">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-10 text-sm text-text-muted sm:flex-row sm:items-center sm:justify-between lg:px-12">
           <div className="flex items-center gap-3">
             <span>&copy; {new Date().getFullYear()} Bivium</span>
