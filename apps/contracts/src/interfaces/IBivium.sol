@@ -18,8 +18,8 @@ struct MarketParams {
 }
 
 /// @dev User-facing input for `createMarket`. `oracle` and `lltv` are looked
-///      up from the curated `tokenConfigs[collateralToken]` registry; the user
-///      cannot pick them directly.
+///      up from the curated `tokenConfigs[collateralToken][loanToken]` registry;
+///      the user cannot pick them directly.
 struct CreateMarketInput {
     address loanToken;
     address collateralToken;
@@ -27,8 +27,9 @@ struct CreateMarketInput {
     address creator;
 }
 
-/// @dev Curated config for a token. `oracle == address(0)` means the token is
-///      not curated and cannot be used as collateral.
+/// @dev Curated config for a (collateralToken, loanToken) pair.
+///      `oracle == address(0)` means the pair is not curated and no market can
+///      be created against it.
 struct TokenConfig {
     address oracle;
     uint256 lltv;
@@ -69,11 +70,12 @@ interface IBiviumBase {
     function DOMAIN_SEPARATOR() external view returns (bytes32);
 
     /// @notice The owner of the contract.
-    /// @dev Has the power to curate tokens (set/remove `tokenConfigs`) and to transfer ownership.
+    /// @dev Has the power to curate pairs (set/remove `tokenConfigs`) and to transfer ownership.
     function owner() external view returns (address);
 
-    /// @notice Curated config (oracle + LLTV) for `token`. `oracle == address(0)` means not curated.
-    function getTokenConfig(address token) external view returns (TokenConfig memory);
+    /// @notice Curated config (oracle + LLTV) for the `(collateralToken, loanToken)` pair.
+    ///         `oracle == address(0)` means the pair is not curated.
+    function getTokenConfig(address collateralToken, address loanToken) external view returns (TokenConfig memory);
 
     /// @notice Whether `authorized` is authorized to modify `authorizer`'s position on all markets.
     function isAuthorized(address authorizer, address authorized) external view returns (bool);
@@ -84,12 +86,13 @@ interface IBiviumBase {
     /// @notice Sets `newOwner` as `owner` of the contract.
     function setOwner(address newOwner) external;
 
-    /// @notice Curates `token` with the given oracle and LLTV.
-    /// @dev Reverts on zero address, zero oracle, or `lltv == 0 || lltv >= WAD`.
-    function setTokenConfig(address token, address oracle, uint256 lltv) external;
+    /// @notice Curates the `(collateralToken, loanToken)` pair with the given oracle and LLTV.
+    /// @dev Reverts on zero collateral, zero loan, zero oracle, or `lltv == 0 || lltv >= WAD`.
+    function setTokenConfig(address collateralToken, address loanToken, address oracle, uint256 lltv) external;
 
-    /// @notice Removes `token` from the curated registry. Does not affect existing markets.
-    function removeTokenConfig(address token) external;
+    /// @notice Removes the `(collateralToken, loanToken)` pair from the curated registry.
+    ///         Does not affect existing markets.
+    function removeTokenConfig(address collateralToken, address loanToken) external;
 
     /// @notice Creates a Bivium market from `input`.
     /// @dev `msg.sender` must equal `input.creator`. `input.collateralToken` must be curated.
@@ -183,7 +186,10 @@ interface IBiviumStaticTyping is IBiviumBase {
             uint128 lastUpdate
         );
 
-    function tokenConfigs(address token) external view returns (address oracle, uint256 lltv);
+    function tokenConfigs(address collateralToken, address loanToken)
+        external
+        view
+        returns (address oracle, uint256 lltv);
 
     function idToMarketParams(Id id)
         external
@@ -203,6 +209,6 @@ interface IBiviumStaticTyping is IBiviumBase {
 interface IBivium is IBiviumBase {
     function position(Id id, address user) external view returns (Position memory p);
     function market(Id id) external view returns (Market memory m);
-    function tokenConfigs(address token) external view returns (TokenConfig memory);
+    function tokenConfigs(address collateralToken, address loanToken) external view returns (TokenConfig memory);
     function idToMarketParams(Id id) external view returns (MarketParams memory);
 }

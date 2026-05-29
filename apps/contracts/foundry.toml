@@ -11,6 +11,13 @@ remappings = [
     "forge-std/=lib/forge-std/src/",
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
 ]
+fs_permissions = [{ access = "read-write", path = "./addresses/" }]
+
+[rpc_endpoints]
+arbitrum = "${ARBITRUM_RPC_URL}"
+
+[etherscan]
+arbitrum = { key = "${ARBISCAN_API_KEY}", chain = 42161 }
 
 [fmt]
 line_length = 120

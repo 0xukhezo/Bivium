@@ -1,5 +1,4 @@
 // Auto-extracted from apps/contracts/out — do not edit by hand.
-// Re-run: pnpm --filter @bivium/indexer regen-abis (see README).
 export const BiviumEventEmitterAbi = [
   {
     "type": "constructor",

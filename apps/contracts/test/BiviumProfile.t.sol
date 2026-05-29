@@ -50,8 +50,11 @@ contract BiviumProfileTest is Test {
         weth = new MockERC20("WETH", "WETH", 18);
         oracle = makeAddr("oracle");
 
-        bivium.setTokenConfig(address(wbtc), oracle, LLTV);
-        bivium.setTokenConfig(address(weth), oracle, LLTV);
+        // All happy-path tests use USDC as the loan token; curate both
+        // collaterals against it. Tests that exercise a different loan token
+        // (e.g. the reentrancy test below) curate their own pair locally.
+        bivium.setTokenConfig(address(wbtc), address(usdc), oracle, LLTV);
+        bivium.setTokenConfig(address(weth), address(usdc), oracle, LLTV);
 
         lender = vm.addr(LENDER_PK);
         vm.signAndAttachDelegation(address(profile), LENDER_PK);
@@ -476,7 +479,7 @@ contract BiviumProfileTest is Test {
         ReentrantToken bad = new ReentrantToken();
         bad.mint(lender, 1_000e18);
 
-        bivium.setTokenConfig(address(bad), oracle, LLTV);
+        bivium.setTokenConfig(address(wbtc), address(bad), oracle, LLTV);
 
         vm.startPrank(lender);
         BiviumProfile(payable(lender)).setRate(address(bad), 10);

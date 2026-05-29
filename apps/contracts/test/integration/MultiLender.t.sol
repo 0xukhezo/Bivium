@@ -57,7 +57,7 @@ contract MultiLenderTest is Test {
         collateralToken = new MockERC20("COLL", "COLL", 18);
         oracle = new MockOracle(ORACLE_PRICE);
 
-        bivium.setTokenConfig(address(collateralToken), address(oracle), LLTV);
+        bivium.setTokenConfig(address(collateralToken), address(loanToken), address(oracle), LLTV);
 
         lenderA = vm.addr(PK_A);
         lenderB = vm.addr(PK_B);

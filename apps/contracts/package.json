@@ -9,6 +9,12 @@
 		"typecheck": "forge build --sizes",
 		"lint": "forge fmt --check",
 		"format": "forge fmt",
-		"clean": "forge clean"
+		"clean": "forge clean",
+		"deploy-check:arbitrum": "set -a && . ./.env && set +a && forge script script/Deploy.s.sol --rpc-url arbitrum --private-key $PRIVATE_KEY -vvvv",
+		"deploy:arbitrum": "set -a && . ./.env && set +a && forge script script/Deploy.s.sol --rpc-url arbitrum --private-key $PRIVATE_KEY --broadcast --verify -vvvv --slow",
+		"curate-token-check:arbitrum": "set -a && . ./.env && set +a && forge script script/CurateToken.s.sol --rpc-url arbitrum --private-key $PRIVATE_KEY -vvvv",
+		"curate-token:arbitrum": "set -a && . ./.env && set +a && forge script script/CurateToken.s.sol --rpc-url arbitrum --private-key $PRIVATE_KEY --broadcast -vvvv --slow",
+		"curate-batch-check:arbitrum": "set -a && . ./.env && set +a && forge script script/CurateBatchArbitrum.s.sol --rpc-url arbitrum --private-key $PRIVATE_KEY -vvvv",
+		"curate-batch:arbitrum": "set -a && . ./.env && set +a && forge script script/CurateBatchArbitrum.s.sol --rpc-url arbitrum --private-key $PRIVATE_KEY --broadcast -vvvv --slow"
 	}
 }

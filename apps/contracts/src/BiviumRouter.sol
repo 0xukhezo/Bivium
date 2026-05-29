@@ -46,7 +46,7 @@ contract BiviumRouter is IBiviumRouter {
         if (!IBivium(BIVIUM).isAuthorized(msg.sender, address(this))) revert NotAuthorized();
 
         // ── 2. Resolve curated config + oracle price once ──
-        TokenConfig memory cfg = IBivium(BIVIUM).getTokenConfig(order.collateralToken);
+        TokenConfig memory cfg = IBivium(BIVIUM).getTokenConfig(order.collateralToken, order.loanToken);
         if (cfg.oracle == address(0)) revert UnsupportedCollateral();
         uint256 price = IOracle(cfg.oracle).price();
 

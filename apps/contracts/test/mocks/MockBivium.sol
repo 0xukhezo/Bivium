@@ -15,7 +15,7 @@ interface IERC20Minimal {
 contract MockBivium {
     using MarketParamsLib for MarketParams;
 
-    mapping(address => TokenConfig) internal _configs;
+    mapping(address => mapping(address => TokenConfig)) internal _configs;
     /// @dev Tracks whether a market with this id has been created (so the
     ///      Profile's create-on-demand branch can detect existing markets).
     mapping(Id => Market) internal _markets;
@@ -45,21 +45,21 @@ contract MockBivium {
 
     bool public revertOnSupply;
 
-    function setTokenConfig(address token, address oracle, uint256 lltv) external {
-        _configs[token] = TokenConfig({oracle: oracle, lltv: lltv});
+    function setTokenConfig(address collateralToken, address loanToken, address oracle, uint256 lltv) external {
+        _configs[collateralToken][loanToken] = TokenConfig({oracle: oracle, lltv: lltv});
     }
 
     function setRevertOnSupply(bool v) external {
         revertOnSupply = v;
     }
 
-    function getTokenConfig(address token) external view returns (TokenConfig memory) {
-        return _configs[token];
+    function getTokenConfig(address collateralToken, address loanToken) external view returns (TokenConfig memory) {
+        return _configs[collateralToken][loanToken];
     }
 
     function createMarket(CreateMarketInput calldata input) external {
         createMarketCalls.push(input);
-        TokenConfig memory cfg = _configs[input.collateralToken];
+        TokenConfig memory cfg = _configs[input.collateralToken][input.loanToken];
         MarketParams memory p = MarketParams({
             loanToken: input.loanToken,
             collateralToken: input.collateralToken,

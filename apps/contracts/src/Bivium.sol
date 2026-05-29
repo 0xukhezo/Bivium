@@ -35,7 +35,8 @@ import {SafeTransferLib} from "./libraries/SafeTransferLib.sol";
 /// @title Bivium
 /// @notice Pool-per-lender lending primitive:
 ///         - inline fixed `ratePerSecond` per market (no external IRM),
-///         - curated `tokenConfigs[token] = {oracle, lltv}` registry,
+///         - curated `tokenConfigs[collateral][loan] = {oracle, lltv}` registry
+///           (per-pair so each `(collateral, loan)` can have its own oracle and LLTV),
 ///         - market identity tied to a sovereign `creator` EOA,
 ///         - `supply.onBehalf` restricted to the market creator (mono-lender),
 ///         - auto-forward of idle supply to the creator on every `repay` and `liquidate`.
@@ -63,9 +64,10 @@ contract Bivium is IBiviumStaticTyping {
     /// @inheritdoc IBiviumStaticTyping
     mapping(Id => Market) public market;
 
-    /// @notice Curated token registry. `oracle == address(0)` means not curated.
+    /// @notice Curated pair registry. Indexed by `(collateralToken, loanToken)`.
+    ///         `oracle == address(0)` means the pair is not curated.
     /// @inheritdoc IBiviumStaticTyping
-    mapping(address => TokenConfig) public tokenConfigs;
+    mapping(address => mapping(address => TokenConfig)) public tokenConfigs;
 
     /// @inheritdoc IBiviumBase
     mapping(address => mapping(address => bool)) public isAuthorized;
@@ -106,25 +108,29 @@ contract Bivium is IBiviumStaticTyping {
     }
 
     /// @inheritdoc IBiviumBase
-    function setTokenConfig(address token, address oracle, uint256 lltv) external onlyOwner {
-        require(token != address(0), ErrorsLib.ZERO_ADDRESS);
+    function setTokenConfig(address collateralToken, address loanToken, address oracle, uint256 lltv)
+        external
+        onlyOwner
+    {
+        require(collateralToken != address(0), ErrorsLib.ZERO_ADDRESS);
+        require(loanToken != address(0), ErrorsLib.ZERO_ADDRESS);
         require(oracle != address(0), ErrorsLib.ZERO_ORACLE);
         require(lltv > 0 && lltv < WAD, ErrorsLib.INVALID_LLTV);
 
-        tokenConfigs[token] = TokenConfig({oracle: oracle, lltv: lltv});
+        tokenConfigs[collateralToken][loanToken] = TokenConfig({oracle: oracle, lltv: lltv});
 
-        emit EventsLib.TokenConfigSet(token, oracle, lltv);
+        emit EventsLib.TokenConfigSet(collateralToken, loanToken, oracle, lltv);
     }
 
     /// @inheritdoc IBiviumBase
-    function removeTokenConfig(address token) external onlyOwner {
-        delete tokenConfigs[token];
-        emit EventsLib.TokenConfigRemoved(token);
+    function removeTokenConfig(address collateralToken, address loanToken) external onlyOwner {
+        delete tokenConfigs[collateralToken][loanToken];
+        emit EventsLib.TokenConfigRemoved(collateralToken, loanToken);
     }
 
     /// @inheritdoc IBiviumBase
-    function getTokenConfig(address token) external view returns (TokenConfig memory) {
-        return tokenConfigs[token];
+    function getTokenConfig(address collateralToken, address loanToken) external view returns (TokenConfig memory) {
+        return tokenConfigs[collateralToken][loanToken];
     }
 
     /* MARKET CREATION */
@@ -134,7 +140,7 @@ contract Bivium is IBiviumStaticTyping {
         require(input.creator == msg.sender, ErrorsLib.NOT_CREATOR);
         require(input.ratePerSecond <= MAX_RATE_PER_SECOND, ErrorsLib.RATE_TOO_HIGH);
 
-        TokenConfig memory cfg = tokenConfigs[input.collateralToken];
+        TokenConfig memory cfg = tokenConfigs[input.collateralToken][input.loanToken];
         require(cfg.oracle != address(0), ErrorsLib.COLLATERAL_NOT_CURATED);
 
         MarketParams memory params = MarketParams({

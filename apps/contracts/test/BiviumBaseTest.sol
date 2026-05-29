@@ -36,7 +36,7 @@ abstract contract BiviumBaseTest is Test {
         collateralToken = new MockERC20("COLL", "COLL", 18);
         oracle = new MockOracle(ORACLE_PRICE);
 
-        bivium.setTokenConfig(address(collateralToken), address(oracle), LLTV);
+        bivium.setTokenConfig(address(collateralToken), address(loanToken), address(oracle), LLTV);
     }
 
     function _input(uint256 ratePerSecond) internal view returns (CreateMarketInput memory) {

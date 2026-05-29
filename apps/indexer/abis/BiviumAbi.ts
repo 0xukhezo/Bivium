@@ -1,5 +1,4 @@
 // Auto-extracted from apps/contracts/out — do not edit by hand.
-// Re-run: pnpm --filter @bivium/indexer regen-abis (see README).
 export const BiviumAbi = [
   {
     "type": "constructor",
@@ -228,7 +227,12 @@ export const BiviumAbi = [
     "name": "getTokenConfig",
     "inputs": [
       {
-        "name": "token",
+        "name": "collateralToken",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "loanToken",
         "type": "address",
         "internalType": "address"
       }
@@ -508,7 +512,12 @@ export const BiviumAbi = [
     "name": "removeTokenConfig",
     "inputs": [
       {
-        "name": "token",
+        "name": "collateralToken",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "loanToken",
         "type": "address",
         "internalType": "address"
       }
@@ -690,7 +699,12 @@ export const BiviumAbi = [
     "name": "setTokenConfig",
     "inputs": [
       {
-        "name": "token",
+        "name": "collateralToken",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "loanToken",
         "type": "address",
         "internalType": "address"
       },
@@ -848,6 +862,11 @@ export const BiviumAbi = [
     "type": "function",
     "name": "tokenConfigs",
     "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
       {
         "name": "",
         "type": "address",
@@ -1407,7 +1426,13 @@ export const BiviumAbi = [
     "name": "TokenConfigRemoved",
     "inputs": [
       {
-        "name": "token",
+        "name": "collateralToken",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "loanToken",
         "type": "address",
         "indexed": true,
         "internalType": "address"
@@ -1420,7 +1445,13 @@ export const BiviumAbi = [
     "name": "TokenConfigSet",
     "inputs": [
       {
-        "name": "token",
+        "name": "collateralToken",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "loanToken",
         "type": "address",
         "indexed": true,
         "internalType": "address"

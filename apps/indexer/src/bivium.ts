@@ -20,11 +20,13 @@ import { lower } from "./lib/ids.js";
 // ──────────────────────────────────────────────────────────────────────────────
 
 ponder.on("Bivium:TokenConfigSet", async ({ event, context }) => {
-	const address = lower(event.args.token);
+	const collateral = lower(event.args.collateralToken);
+	const loan = lower(event.args.loanToken);
 	await context.db
 		.insert(tokens)
 		.values({
-			address,
+			collateral,
+			loan,
 			oracle: lower(event.args.oracle),
 			lltv: event.args.lltv,
 			active: true,
@@ -39,12 +41,13 @@ ponder.on("Bivium:TokenConfigSet", async ({ event, context }) => {
 });
 
 ponder.on("Bivium:TokenConfigRemoved", async ({ event, context }) => {
-	const address = lower(event.args.token);
+	const collateral = lower(event.args.collateralToken);
+	const loan = lower(event.args.loanToken);
 	// Don't delete: existing markets keep the old (oracle, lltv) tuple. Flag
 	// inactive so the orderbook frontend can hide it from new borrows while the
 	// historical context (which oracle this market trusts) stays queryable.
 	await context.db
-		.update(tokens, { address })
+		.update(tokens, { collateral, loan })
 		.set({ active: false, updatedAtBlock: event.block.number });
 });
 

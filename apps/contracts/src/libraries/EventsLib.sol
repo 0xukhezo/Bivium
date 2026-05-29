@@ -9,11 +9,13 @@ library EventsLib {
     /// @notice Emitted when setting a new owner.
     event SetOwner(address indexed newOwner);
 
-    /// @notice Emitted when curating a token (oracle + LLTV pair) in the registry.
-    event TokenConfigSet(address indexed token, address oracle, uint256 lltv);
+    /// @notice Emitted when curating a `(collateralToken, loanToken)` pair (oracle + LLTV) in the registry.
+    event TokenConfigSet(
+        address indexed collateralToken, address indexed loanToken, address oracle, uint256 lltv
+    );
 
-    /// @notice Emitted when removing a token from the registry.
-    event TokenConfigRemoved(address indexed token);
+    /// @notice Emitted when removing a `(collateralToken, loanToken)` pair from the registry.
+    event TokenConfigRemoved(address indexed collateralToken, address indexed loanToken);
 
     /// @notice Emitted when creating a market.
     /// @param id The market id.

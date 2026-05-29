@@ -42,8 +42,8 @@ contract Profile7702Test is Test {
         weth = new MockERC20("WETH", "WETH", 18);
         oracle = makeAddr("oracle");
 
-        bivium.setTokenConfig(address(wbtc), oracle, LLTV);
-        bivium.setTokenConfig(address(weth), oracle, LLTV);
+        bivium.setTokenConfig(address(wbtc), address(usdc), oracle, LLTV);
+        bivium.setTokenConfig(address(weth), address(usdc), oracle, LLTV);
 
         lender = vm.addr(LENDER_PK);
     }

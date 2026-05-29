@@ -73,19 +73,34 @@ export const lenderCollaterals = onchainTable(
 );
 
 /**
- * Protocol-curated collateral registry (the `tokenConfigs` mapping in Bivium).
+ * Protocol-curated `(collateralToken, loanToken)` pair registry (the
+ * `tokenConfigs` mapping in Bivium). Composite PK lets the same collateral
+ * coexist against multiple loan tokens with independent oracles and LLTVs.
+ *
  * `active = false` rows are kept for history — removal does not affect existing
  * markets, so the indexer must keep the oracle/lltv reference around.
  *
  * Token decimals live on-chain; the frontend reads them via ERC20.decimals().
  */
-export const tokens = onchainTable("tokens", (t) => ({
-	address: t.hex().primaryKey(),
-	oracle: t.hex().notNull(),
-	lltv: t.bigint().notNull(),
-	active: t.boolean().notNull().default(true),
-	updatedAtBlock: t.bigint().notNull(),
-}));
+export const tokens = onchainTable(
+	"tokens",
+	(t) => ({
+		collateral: t.hex().notNull(),
+		loan: t.hex().notNull(),
+		oracle: t.hex().notNull(),
+		lltv: t.bigint().notNull(),
+		active: t.boolean().notNull().default(true),
+		updatedAtBlock: t.bigint().notNull(),
+	}),
+	(table) => ({
+		pk: primaryKey({ columns: [table.collateral, table.loan] }),
+		// Hot paths: "all loans against this collateral" and "all collaterals
+		// accepted for this loan token". Both filter by `active = true` in the
+		// frontend, so the index is on the natural lookup column only.
+		byCollateralIdx: index().on(table.collateral),
+		byLoanIdx: index().on(table.loan),
+	}),
+);
 
 // ──────────────────────────────────────────────────────────────────────────────
 // B. Markets + positions (mutable state)
