@@ -41,10 +41,8 @@
   --radius-xl: 20px;
   --radius-pill: 9999px;
 
-  /* Elevation */
-  --shadow-card:
-    inset 0 1px 0 0 rgba(255, 255, 255, .04),
-    0 12px 32px -16px rgba(2, 11, 34, .55);
+  /* Glow stays theme-independent; --shadow-card is set per theme below
+     because a navy-tinted shadow disappears on a navy dark background. */
   --shadow-glow-cyan: 0 0 24px rgba(20, 242, 252, .25);
 }
 
@@ -63,6 +61,16 @@
   --focus-ring:        var(--color-arb-cyan);
   --chart-flow:        rgba(42, 70, 122, .35);
   --chart-flow-active: var(--color-arb-cyan);
+
+  /* Pure-black outer shadow so depth is visible against the navy bg, plus a
+     stronger top inset highlight for the raised-edge feel. */
+  --shadow-card:
+    inset 0 1px 0 0 rgba(255, 255, 255, .08),
+    0 12px 32px -16px rgba(0, 0, 0, .6),
+    0 4px 12px -6px rgba(0, 0, 0, .4);
+
+  /* Orderbook depth-bar tint — bright cyan reads against navy. */
+  --depth-bar: rgba(20, 242, 252, 0.22);
 }
 
 /* Light theme */
@@ -85,6 +93,16 @@
   --color-success: 4 120 87;
   --color-warn:    180 83 9;
   --color-danger:  185 28 28;
+
+  /* Soft navy-tinted shadow — same hue as the existing look, no inset
+     white (which would be invisible on a white surface). */
+  --shadow-card:
+    0 1px 0 0 rgba(2, 11, 34, .04),
+    0 12px 32px -16px rgba(2, 11, 34, .18),
+    0 2px 6px -3px rgba(2, 11, 34, .08);
+
+  /* Depth-bar needs deeper blue + more alpha on a white bg. */
+  --depth-bar: rgba(1, 118, 248, 0.32);
 }
 
 /* ── Base styles ─────────────────────────────────────────────────────── */
@@ -124,6 +142,28 @@
     -ms-overflow-style: none;
   }
   .scrollbar-none::-webkit-scrollbar { display: none; }
+}
+
+/* Orderbook row entry + depth-bar grow. Used by <LenderOrderbook>. */
+@keyframes orderbook-row-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes orderbook-depth-in {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+.orderbook-row {
+  opacity: 0;
+  animation: orderbook-row-in 360ms cubic-bezier(.22, 1, .36, 1) forwards;
+}
+
+.orderbook-depth {
+  transform-origin: left;
+  transform: scaleX(0);
+  animation: orderbook-depth-in 680ms cubic-bezier(.22, 1, .36, 1) forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {

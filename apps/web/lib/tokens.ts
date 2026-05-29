@@ -47,3 +47,15 @@ export function getTokenByAddress(address: string): Token | undefined {
   const needle = address.toLowerCase();
   return SUPPORTED_TOKENS.find((t) => t.address.toLowerCase() === needle);
 }
+
+// Placeholder prices used to drive USD math while oracle reads aren't wired.
+// Keyed by symbol because the mock data flows through symbol checks already.
+const MOCK_PRICES_USD: Record<string, number> = {
+  USDC: 1,
+  WBTC: 70_000,
+  ETH: 3_500,
+};
+
+export function getMockPriceUsd(token: Token): number {
+  return MOCK_PRICES_USD[token.symbol] ?? 1;
+}

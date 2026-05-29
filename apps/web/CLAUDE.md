@@ -178,6 +178,42 @@ For free-form numeric entry (rate %, repay amount) use a **string-valued state**
 - Call read hooks **unconditionally, before any early `return`** (Rules of Hooks). Guard with `query: { enabled }` and pass nullable args — `useTokenBalance(loan?.loanToken)` is safe when `loan` is null. `RepayModal` is the reference usage (shows `…` while loading, drives the MAX/insufficient-balance logic off the real balance).
 - "ETH" in the token registry is **WETH** (an ERC-20), so `useTokenBalance` reads the WETH balance — native ETH isn't special-cased yet.
 
+### Bivium contracts integration
+
+The Bivium protocol contracts live in `apps/contracts/` (Foundry). The web app talks to them through a thin layer:
+
+- **`lib/contracts/abis/`** — `BiviumAbi`, `BiviumRouterAbi`, `BiviumEventEmitterAbi` (copied verbatim from `apps/indexer/abis/` — keep in sync when the indexer regenerates), plus a **hand-extracted** `BiviumProfileAbi` (the indexer doesn't ship Profile, since each lender's EOA is a unique instance). Replace the hand-extracted one with the forge artifact once `apps/contracts/out/` is generated.
+- **`lib/contracts/addresses.ts`** — reads deployed addresses from `NEXT_PUBLIC_BIVIUM_ADDRESS`, `NEXT_PUBLIC_BIVIUM_ROUTER_ADDRESS`, `NEXT_PUBLIC_BIVIUM_EVENT_EMITTER_ADDRESS`. Use `requireAddress("router")` etc. at write sites; reads can pass them through `query: { enabled }` guards.
+- **`lib/contracts/index.ts`** — single entry point re-exporting ABIs + addresses.
+
+**Architecture facts that shape every hook:**
+
+- **The Profile is the lender's own EOA.** `BiviumProfile.setRate`, `setAllowedCollaterals`, `add/removeAllowedCollateral`, `pause`, `unpause` are all called with `address: connectedWallet` (ERC-7702 delegate calls) — *not* a single deployed contract. The `useLenderProfile*` hooks already handle this.
+- **`Bivium.sol`** is the core lending engine (one deployed address — `NEXT_PUBLIC_BIVIUM_ADDRESS`). Used for low-level supply/withdraw/borrow/repay/liquidate and `accrueInterest` reads.
+- **`BiviumRouter.sol`** is the borrower-facing orderbook executor (one address — `NEXT_PUBLIC_BIVIUM_ROUTER_ADDRESS`). Borrow/repay always go through the Router, never the core. `repay(RepayItem[])` is multi-market atomic — see `useBiviumRouterWrite.ts` and the `RepayItem` / `MarketParams` types there.
+- **`BiviumEventEmitter.sol`** is read-only from the app's perspective — it's the canonical event source the indexer consumes. Not needed for write flows.
+
+**Hooks (live, typecheck-clean, ready to wire):**
+
+| Action | Hook (`hooks/`) | Target |
+|---|---|---|
+| Set fixed rate per lend asset | `useSetRate` | lender's EOA |
+| Replace accepted-collateral list | `useSetAllowedCollaterals` | lender's EOA |
+| Add/remove single collateral | `useAddAllowedCollateral` / `useRemoveAllowedCollateral` | lender's EOA |
+| Pause / resume lender (global) | `usePauseProfile` / `useUnpauseProfile` | lender's EOA |
+| Read paused + allowed-collateral list | `useLenderProfile` | lender's EOA |
+| Read per-token rates | `useLenderRates(tokens)` | lender's EOA |
+| Atomic multi-market repay | `useRepay` (`useBiviumRouterWrite`) | Router |
+| Wallet token balance | `useTokenBalance` | any ERC-20 |
+
+Each write hook returns `{ <action>, hash, isPending, isConfirming, isSuccess, error, reset }` — wire button "Confirming…" off `isPending || isConfirming`, refresh local state on `isSuccess`.
+
+**Rate units.** `BiviumProfile.setRate` takes `ratePerSecond` as a 1e18 fixed-point bigint. Convert from a human percent with `annualRateToRatePerSecond(annual)` from `useLenderProfileWrite.ts`; convert back with `ratePerSecondToAnnual(rps)`.
+
+**Don't construct `MarketParams` on the client.** Source it from the indexer / position list. The router consumes the full struct (the on-chain market id is derived from it), so a wrong oracle/lltv = wrong market = revert.
+
+**One pause flag, not per-market.** `BiviumProfile.paused` is global across all of a lender's markets — pausing stops new borrows everywhere, resuming reopens everywhere. The per-row Pause/Resume button in `MyMarketsCard` doesn't match the contract; treat it as global until the UI is unified.
+
 ## Gotchas
 
 - Restart dev server after `tailwind.config.ts` edits.
