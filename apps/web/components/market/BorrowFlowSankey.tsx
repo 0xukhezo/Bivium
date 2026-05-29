@@ -40,7 +40,7 @@ export function BorrowFlowSankey({ fills, loanToken }: BorrowFlowSankeyProps) {
 
   // Source-id → rate for the link tooltip.
   const ratesByLender = new Map(
-    fills.map((f) => [f.offer.lender, f.offer.rate]),
+    fills.map((f) => [f.offer.lender, f.offer.ratePerSecond]),
   );
 
   // Per-fill vertical position = the SOURCE node's slice center. With one
@@ -56,10 +56,11 @@ export function BorrowFlowSankey({ fills, loanToken }: BorrowFlowSankeyProps) {
     cumulative += f.amount;
     const sourceCenter = (start + end) / 2; // 0..1 within inner area
     const yPx = 8 + sourceCenter * 208;
-    return { rate: f.offer.rate, yPx };
+    return { rate: f.offer.ratePerSecond, yPx };
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // `link` shape comes from nivo at runtime; typing it strictly here would
+  // pull half of @nivo/sankey's internals — `any` is the pragmatic choice.
   const LinkTooltip = ({ link }: { link: any }) => {
     const sourceId =
       typeof link.source === "string" ? link.source : link.source?.id;

@@ -1,13 +1,31 @@
 import { ARBITRUM_TOKENS, type Token } from "./tokens";
 
+/**
+ * Schema-aligned market row.
+ *
+ * Field names match `markets` in `apps/indexer/ponder.schema.ts`. Today the
+ * value types are JS numbers (and the Token object refs); tomorrow we retype
+ * to schema-native bigints (`ratePerSecond` becomes 1e18 per-second, `lltv`
+ * becomes 1e18 fixed-point, amounts/shares become bigint base units) and the
+ * `loanToken` / `collateralToken` will resolve from the schema's address
+ * column via `getTokenByAddress`.
+ */
 export interface Market {
-  id: string;
-  collateralToken: Token;
+  id: `0x${string}`;
+  collateralToken: Token; // UI-resolved Token (joined via getTokenByAddress at the seam)
   loanToken: Token;
-  lltv: number; // 0–1, e.g. 0.86 = 86%
-  totalLiquidity: { amount: number; usd: number };
-  totalBorrowed: { amount: number; usd: number };
-  rate: number; // 0–1, annualized
+  oracle: `0x${string}`;
+  creator: `0x${string}`;
+  /** TODO: 1e18 bigint tomorrow. Today: 0–1 annualized fraction. */
+  ratePerSecond: number;
+  /** TODO: 1e18 bigint tomorrow. Today: 0–1 fraction. */
+  lltv: number;
+  totalSupplyAssets: { amount: number; usd: number };
+  totalBorrowAssets: { amount: number; usd: number };
+  totalSupplyShares: number;
+  totalBorrowShares: number;
+  /** Unix seconds. */
+  lastAccrualTimestamp: number;
 }
 
 // Placeholder reference prices used only to derive USD values for mock display.
@@ -29,6 +47,12 @@ const TOKEN_PAIRS: Array<[Token, Token]> = [
 
 const LLTVS = [0.7, 0.75, 0.8, 0.86, 0.91];
 
+// Mock oracle address — all-zeros sentinel (valid hex). Real oracle addresses
+// arrive from the `tokens.oracle` schema column tomorrow.
+const MOCK_ORACLE: `0x${string}` = `0x${"0".repeat(40)}` as `0x${string}`;
+
+const NOW = Math.floor(Date.now() / 1000);
+
 // Deterministic mock so SSR and hydration stay consistent.
 export const MOCK_MARKETS: Market[] = Array.from({ length: 25 }, (_, i) => {
   const [collateral, loan] = TOKEN_PAIRS[i % TOKEN_PAIRS.length];
@@ -37,15 +61,27 @@ export const MOCK_MARKETS: Market[] = Array.from({ length: 25 }, (_, i) => {
   const liqUsd = (100 + seed * 14) * 1_000_000;
   const utilization = 0.35 + ((seed * 7) % 50) / 100;
   const borrowUsd = liqUsd * utilization;
+  const idSuffix = i.toString(16).padStart(4, "0");
+  // Creator address shares the index so MyMarketsCard's mock filter can
+  // tomorrow filter by `markets.creator = currentLender`.
+  const creator =
+    `0x${"c".repeat(36)}${idSuffix}` as `0x${string}`;
+  const supplyAmount = liqUsd / loanPrice;
+  const borrowAmount = borrowUsd / loanPrice;
 
   return {
-    id: `0x${"0".repeat(36)}${i.toString(16).padStart(4, "0")}`,
+    id: `0x${"0".repeat(36)}${idSuffix}` as `0x${string}`,
     collateralToken: collateral,
     loanToken: loan,
+    oracle: MOCK_ORACLE,
+    creator,
+    ratePerSecond: 0.015 + ((seed * 3) % 60) / 1000,
     lltv: LLTVS[seed % LLTVS.length],
-    totalLiquidity: { amount: liqUsd / loanPrice, usd: liqUsd },
-    totalBorrowed: { amount: borrowUsd / loanPrice, usd: borrowUsd },
-    rate: 0.015 + ((seed * 3) % 60) / 1000,
+    totalSupplyAssets: { amount: supplyAmount, usd: liqUsd },
+    totalBorrowAssets: { amount: borrowAmount, usd: borrowUsd },
+    totalSupplyShares: supplyAmount, // mock: 1:1 with assets
+    totalBorrowShares: borrowAmount,
+    lastAccrualTimestamp: NOW,
   };
 });
 

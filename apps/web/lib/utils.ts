@@ -47,3 +47,16 @@ export function formatUsd(value: number): string {
 export function formatPercent(value: number, decimals = 2): string {
   return `${(value * 100).toFixed(decimals)}%`;
 }
+
+const SECONDS_PER_YEAR = 365 * 24 * 60 * 60; // 31,536,000
+
+/** Annualized rate (0–1, e.g. 0.05 = 5%) → ratePerSecond as 1e18 fixed point. */
+export function annualRateToRatePerSecond(annualRate: number): bigint {
+  if (annualRate < 0 || !Number.isFinite(annualRate)) return 0n;
+  const scaled = Math.round((annualRate * 1e18) / SECONDS_PER_YEAR);
+  return BigInt(scaled);
+}
+
+export function ratePerSecondToAnnual(rps: bigint): number {
+  return (Number(rps) * SECONDS_PER_YEAR) / 1e18;
+}

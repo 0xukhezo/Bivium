@@ -24,7 +24,7 @@ function hasDiff(a: LendingAsset[], b: LendingAsset[]): boolean {
   if (a.length !== b.length) return true;
   return a.some((aa) => {
     const match = findAsset(b, aa.token.address);
-    return !match || match.rate !== aa.rate;
+    return !match || match.ratePerSecond !== aa.ratePerSecond;
   });
 }
 
@@ -33,7 +33,7 @@ function buildInitialRateInputs(
 ): Record<string, string> {
   const map: Record<string, string> = {};
   for (const a of assets) {
-    map[a.token.address.toLowerCase()] = (a.rate * 100).toFixed(2);
+    map[a.token.address.toLowerCase()] = (a.ratePerSecond * 100).toFixed(2);
   }
   return map;
 }
@@ -62,7 +62,7 @@ export function LendingAssetsCard() {
         return next;
       });
     } else {
-      setDraft((prev) => [...prev, { token, rate: 0.05 }]);
+      setDraft((prev) => [...prev, { token, ratePerSecond: 0.05 }]);
       setRateInputs((prev) => ({ ...prev, [key]: "5.00" }));
     }
   };
@@ -71,10 +71,12 @@ export function LendingAssetsCard() {
     const key = address.toLowerCase();
     setRateInputs((prev) => ({ ...prev, [key]: raw }));
     const v = parseFloat(raw);
-    const rate = Number.isNaN(v) ? 0 : Math.max(0, v) / 100;
+    const ratePerSecond = Number.isNaN(v) ? 0 : Math.max(0, v) / 100;
     setDraft((prev) =>
       prev.map((a) =>
-        sameAddress(a.token.address, address) ? { ...a, rate } : a,
+        sameAddress(a.token.address, address)
+          ? { ...a, ratePerSecond }
+          : a,
       ),
     );
   };

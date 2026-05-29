@@ -74,7 +74,7 @@ export function LenderOrderbook({
                 {truncateAddress(offer.lender)}
               </span>
               <span className="relative font-semibold text-accent">
-                {formatPercent(offer.rate)}
+                {formatPercent(offer.ratePerSecond)}
               </span>
               <span className="relative text-right text-text-primary">
                 {formatCompact(offer.indicativeSize.amount)}

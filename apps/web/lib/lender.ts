@@ -2,7 +2,8 @@ import { ARBITRUM_TOKENS, type Token } from "./tokens";
 
 export interface LendingAsset {
   token: Token;
-  rate: number; // 0–1, e.g. 0.05 = 5%
+  /** TODO: 1e18 bigint tomorrow. Today: 0–1 annualized fraction. */
+  ratePerSecond: number;
 }
 
 export interface LenderPreferences {
@@ -10,14 +11,23 @@ export interface LenderPreferences {
   collateralAssets: Token[];
 }
 
+/**
+ * A lender's owned market — the result of joining `markets` with the
+ * aggregated `positions.collateral` for `marketId = market.id`. Field names
+ * match the indexer's `markets` columns where possible; `totalCollateral` is
+ * the aggregated join result (no schema column for it directly).
+ */
 export interface LenderMarket {
-  id: string;
+  id: `0x${string}`;
   collateralToken: Token;
   loanToken: Token;
+  creator: `0x${string}`;
+  /** TODO: 1e18 bigint tomorrow. */
   lltv: number;
-  rate: number;
-  onLoan: { amount: number; usd: number };
-  collateral: { amount: number; usd: number };
+  /** TODO: 1e18 bigint per-second tomorrow. */
+  ratePerSecond: number;
+  totalBorrowAssets: { amount: number; usd: number };
+  totalCollateral: { amount: number; usd: number };
   apyGenerated: number;
   status: "active" | "paused";
 }
@@ -39,21 +49,25 @@ export const AVAILABLE_COLLATERAL_ASSETS: Token[] = [
 // Current lender state (what's "persisted on-chain" in mock terms).
 export const MOCK_LENDER_PREFERENCES: LenderPreferences = {
   lendingAssets: [
-    { token: ARBITRUM_TOKENS.USDC, rate: 0.05 },
-    { token: ARBITRUM_TOKENS.ETH, rate: 0.035 },
+    { token: ARBITRUM_TOKENS.USDC, ratePerSecond: 0.05 },
+    { token: ARBITRUM_TOKENS.ETH, ratePerSecond: 0.035 },
   ],
   collateralAssets: [ARBITRUM_TOKENS.WBTC, ARBITRUM_TOKENS.ETH],
 };
+
+const MOCK_LENDER_ADDR =
+  `0x${"c".repeat(40)}` as `0x${string}`;
 
 export const MOCK_LENDER_MARKETS: LenderMarket[] = [
   {
     id: `0x${"0".repeat(36)}0001`,
     collateralToken: ARBITRUM_TOKENS.WBTC,
     loanToken: ARBITRUM_TOKENS.USDC,
+    creator: MOCK_LENDER_ADDR,
     lltv: 0.86,
-    rate: 0.05,
-    onLoan: { amount: 540_000, usd: 540_000 },
-    collateral: { amount: 12, usd: 840_000 },
+    ratePerSecond: 0.05,
+    totalBorrowAssets: { amount: 540_000, usd: 540_000 },
+    totalCollateral: { amount: 12, usd: 840_000 },
     apyGenerated: 0.0475,
     status: "active",
   },
@@ -61,10 +75,11 @@ export const MOCK_LENDER_MARKETS: LenderMarket[] = [
     id: `0x${"0".repeat(36)}0002`,
     collateralToken: ARBITRUM_TOKENS.ETH,
     loanToken: ARBITRUM_TOKENS.USDC,
+    creator: MOCK_LENDER_ADDR,
     lltv: 0.8,
-    rate: 0.045,
-    onLoan: { amount: 380_000, usd: 380_000 },
-    collateral: { amount: 145, usd: 507_500 },
+    ratePerSecond: 0.045,
+    totalBorrowAssets: { amount: 380_000, usd: 380_000 },
+    totalCollateral: { amount: 145, usd: 507_500 },
     apyGenerated: 0.0418,
     status: "active",
   },
@@ -72,10 +87,11 @@ export const MOCK_LENDER_MARKETS: LenderMarket[] = [
     id: `0x${"0".repeat(36)}0003`,
     collateralToken: ARBITRUM_TOKENS.WBTC,
     loanToken: ARBITRUM_TOKENS.ETH,
+    creator: MOCK_LENDER_ADDR,
     lltv: 0.75,
-    rate: 0.035,
-    onLoan: { amount: 0, usd: 0 },
-    collateral: { amount: 0, usd: 0 },
+    ratePerSecond: 0.035,
+    totalBorrowAssets: { amount: 0, usd: 0 },
+    totalCollateral: { amount: 0, usd: 0 },
     apyGenerated: 0,
     status: "paused",
   },

@@ -13,7 +13,8 @@ export interface LenderOffer {
   lender: `0x${string}`;
   displayName: string; // ENS or short label
   loanToken: Token;
-  rate: number; // annualized, 0–1
+  /** TODO: 1e18 bigint per-second tomorrow. Today: 0–1 annualized fraction. */
+  ratePerSecond: number;
   indicativeSize: { amount: number; usd: number };
   acceptedCollaterals: Token[];
   paused: boolean;
@@ -63,13 +64,14 @@ function buildOffers(): LenderOffer[] {
     const lenderSkew = (i % 5) * 0.004; // 0 → 1.6% spread between lenders
     const sizeBase = 50_000 + i * 35_000; // 50k → 225k USD indicative size
     tokens.forEach((loanToken) => {
-      const rate = (tokenRateBias[loanToken.symbol] ?? 0.04) + lenderSkew;
+      const ratePerSecond =
+        (tokenRateBias[loanToken.symbol] ?? 0.04) + lenderSkew;
       const price = PRICES_USD[loanToken.symbol] ?? 1;
       out.push({
         lender: l.addr as `0x${string}`,
         displayName: l.name,
         loanToken,
-        rate,
+        ratePerSecond,
         indicativeSize: {
           amount: sizeBase / price,
           usd: sizeBase,
@@ -100,7 +102,7 @@ export function offersForPair(
       o.acceptedCollaterals.some((c) =>
         sameAddress(c.address, collateralToken.address),
       ),
-  ).sort((a, b) => a.rate - b.rate);
+  ).sort((a, b) => a.ratePerSecond - b.ratePerSecond);
 }
 
 /** Single allocation in the order-book walk. */
@@ -134,12 +136,12 @@ export function walkOrderbook(
     const take = Math.min(remaining, offer.indicativeSize.amount);
     if (take > 1e-12) {
       fills.push({ offer, amount: take });
-      rateXSize += offer.rate * take;
+      rateXSize += offer.ratePerSecond * take;
       remaining -= take;
     }
   }
   const totalFilled = Math.max(0, requested - remaining);
   const weightedAvgRate = totalFilled > 0 ? rateXSize / totalFilled : 0;
-  const bestRate = offers.length > 0 ? offers[0].rate : 0;
+  const bestRate = offers.length > 0 ? offers[0].ratePerSecond : 0;
   return { fills, totalFilled, weightedAvgRate, bestRate };
 }

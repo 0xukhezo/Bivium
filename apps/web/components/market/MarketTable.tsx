@@ -33,11 +33,11 @@ function compareMarkets(key: SortKey, a: Market, b: Market): number {
     case "lltv":
       return a.lltv - b.lltv;
     case "liquidity":
-      return a.totalLiquidity.usd - b.totalLiquidity.usd;
+      return a.totalSupplyAssets.usd - b.totalSupplyAssets.usd;
     case "borrowed":
-      return a.totalBorrowed.usd - b.totalBorrowed.usd;
+      return a.totalBorrowAssets.usd - b.totalBorrowAssets.usd;
     case "rate":
-      return a.rate - b.rate;
+      return a.ratePerSecond - b.ratePerSecond;
   }
 }
 
@@ -185,24 +185,24 @@ export function MarketTable() {
                     </td>
                     <td className="px-4 py-4">
                       <p className="font-medium tabular-nums text-text-primary">
-                        {formatCompact(market.totalLiquidity.amount)}{" "}
+                        {formatCompact(market.totalSupplyAssets.amount)}{" "}
                         {market.loanToken.symbol}
                       </p>
                       <p className="text-xs tabular-nums text-text-muted">
-                        {formatUsd(market.totalLiquidity.usd)}
+                        {formatUsd(market.totalSupplyAssets.usd)}
                       </p>
                     </td>
                     <td className="px-4 py-4">
                       <p className="font-medium tabular-nums text-text-primary">
-                        {formatCompact(market.totalBorrowed.amount)}{" "}
+                        {formatCompact(market.totalBorrowAssets.amount)}{" "}
                         {market.loanToken.symbol}
                       </p>
                       <p className="text-xs tabular-nums text-text-muted">
-                        {formatUsd(market.totalBorrowed.usd)}
+                        {formatUsd(market.totalBorrowAssets.usd)}
                       </p>
                     </td>
                     <td className="px-4 py-4 text-right font-medium tabular-nums text-text-primary">
-                      {formatPercent(market.rate)}
+                      {formatPercent(market.ratePerSecond)}
                     </td>
                   </tr>
                 ))}

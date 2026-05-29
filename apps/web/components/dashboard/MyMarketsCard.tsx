@@ -29,9 +29,9 @@ function compare(key: SortKey, a: LenderMarket, b: LenderMarket): number {
     case "loan":
       return a.loanToken.symbol.localeCompare(b.loanToken.symbol);
     case "collateralAmount":
-      return a.collateral.usd - b.collateral.usd;
+      return a.totalCollateral.usd - b.totalCollateral.usd;
     case "onLoan":
-      return a.onLoan.usd - b.onLoan.usd;
+      return a.totalBorrowAssets.usd - b.totalBorrowAssets.usd;
     case "apy":
       return a.apyGenerated - b.apyGenerated;
     case "status":
@@ -145,19 +145,20 @@ export function MyMarketsCard() {
                       </td>
                       <td className="px-4 py-4">
                         <p className="font-medium tabular-nums text-text-primary">
-                          {formatCompact(m.collateral.amount)}{" "}
+                          {formatCompact(m.totalCollateral.amount)}{" "}
                           {m.collateralToken.symbol}
                         </p>
                         <p className="text-xs tabular-nums text-text-muted">
-                          {formatUsd(m.collateral.usd)}
+                          {formatUsd(m.totalCollateral.usd)}
                         </p>
                       </td>
                       <td className="px-4 py-4">
                         <p className="font-medium tabular-nums text-text-primary">
-                          {formatCompact(m.onLoan.amount)} {m.loanToken.symbol}
+                          {formatCompact(m.totalBorrowAssets.amount)}{" "}
+                          {m.loanToken.symbol}
                         </p>
                         <p className="text-xs tabular-nums text-text-muted">
-                          {formatUsd(m.onLoan.usd)}
+                          {formatUsd(m.totalBorrowAssets.usd)}
                         </p>
                       </td>
                       <td className="px-4 py-4 font-medium tabular-nums text-text-primary">

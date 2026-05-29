@@ -57,7 +57,7 @@ export function RepayModal({ loan, open, onClose, onConfirm }: RepayModalProps) 
 
   const newHf =
     remainingUsd > 0
-      ? (loan.collateralPosted.usd * loan.lltv) / remainingUsd
+      ? (loan.collateral.usd * loan.lltv) / remainingUsd
       : Number.POSITIVE_INFINITY;
 
   const valid = amount > 0 && !exceedsBalance;

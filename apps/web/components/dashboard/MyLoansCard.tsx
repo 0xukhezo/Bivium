@@ -27,11 +27,11 @@ function debtUsd(loan: BorrowerLoan): number {
 function compare(key: SortKey, a: BorrowerLoan, b: BorrowerLoan): number {
   switch (key) {
     case "collateral":
-      return a.collateralPosted.usd - b.collateralPosted.usd;
+      return a.collateral.usd - b.collateral.usd;
     case "debt":
       return debtUsd(a) - debtUsd(b);
     case "rate":
-      return a.rate - b.rate;
+      return a.ratePerSecond - b.ratePerSecond;
     case "health":
       return a.healthFactor - b.healthFactor;
   }
@@ -113,8 +113,8 @@ export function MyLoansCard({ loans, onRepay }: MyLoansCardProps) {
                       <td className="px-4 py-4">
                         <AmountCell
                           token={loan.collateralToken}
-                          amount={loan.collateralPosted.amount}
-                          usd={loan.collateralPosted.usd}
+                          amount={loan.collateral.amount}
+                          usd={loan.collateral.usd}
                         />
                       </td>
                       <td className="px-4 py-4">
@@ -125,7 +125,7 @@ export function MyLoansCard({ loans, onRepay }: MyLoansCardProps) {
                         />
                       </td>
                       <td className="px-4 py-4 font-medium tabular-nums text-text-primary">
-                        {formatPercent(loan.rate)}
+                        {formatPercent(loan.ratePerSecond)}
                       </td>
                       <td className="px-4 py-4">
                         <HealthBadge value={loan.healthFactor} />

@@ -120,8 +120,8 @@ export default function MarketDetailPage({ params }: PageProps) {
 }
 
 function utilization(market: Market): number {
-  return market.totalLiquidity.usd > 0
-    ? market.totalBorrowed.usd / market.totalLiquidity.usd
+  return market.totalSupplyAssets.usd > 0
+    ? market.totalBorrowAssets.usd / market.totalSupplyAssets.usd
     : 0;
 }
 
@@ -133,7 +133,7 @@ function StatsPanel({ market }: { market: Market }) {
       <Card>
         <p className="text-sm text-text-secondary">Rate</p>
         <p className="mt-1 text-3xl font-semibold tabular-nums text-text-primary">
-          {formatPercent(market.rate)}
+          {formatPercent(market.ratePerSecond)}
         </p>
       </Card>
 
@@ -142,13 +142,13 @@ function StatsPanel({ market }: { market: Market }) {
         <div className="flex flex-col gap-5">
           <StatRow
             label="Total liquidity"
-            value={`${formatCompact(market.totalLiquidity.amount)} ${loanToken.symbol}`}
-            sub={formatUsd(market.totalLiquidity.usd)}
+            value={`${formatCompact(market.totalSupplyAssets.amount)} ${loanToken.symbol}`}
+            sub={formatUsd(market.totalSupplyAssets.usd)}
           />
           <StatRow
             label="Total borrowed"
-            value={`${formatCompact(market.totalBorrowed.amount)} ${loanToken.symbol}`}
-            sub={formatUsd(market.totalBorrowed.usd)}
+            value={`${formatCompact(market.totalBorrowAssets.amount)} ${loanToken.symbol}`}
+            sub={formatUsd(market.totalBorrowAssets.usd)}
           />
           <StatRow label="LLTV" value={formatPercent(market.lltv)} />
           <StatRow label="Utilization" value={formatPercent(util)} />

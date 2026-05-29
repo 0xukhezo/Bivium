@@ -11,17 +11,19 @@ interface BorrowerSummaryProps {
 
 export function BorrowerSummary({ loans }: BorrowerSummaryProps) {
   const stats = useMemo(() => {
-    const totalBorrowed = loans.reduce(
+    // Local name (`totalDebt`) avoids colliding with the schema's old
+    // `Market.totalBorrowed` field name we've migrated away from.
+    const totalDebt = loans.reduce(
       (acc, l) => acc + l.principal.usd + l.accruedInterest.usd,
       0,
     );
     const totalCollateral = loans.reduce(
-      (acc, l) => acc + l.collateralPosted.usd,
+      (acc, l) => acc + l.collateral.usd,
       0,
     );
     const lowestHf =
       loans.length === 0 ? null : Math.min(...loans.map((l) => l.healthFactor));
-    return { totalBorrowed, totalCollateral, lowestHf };
+    return { totalDebt, totalCollateral, lowestHf };
   }, [loans]);
 
   const hfColor =
@@ -38,7 +40,7 @@ export function BorrowerSummary({ loans }: BorrowerSummaryProps) {
       <Card>
         <CardLabel>Total borrowed</CardLabel>
         <p className="mt-2 text-2xl font-semibold tabular-nums text-text-primary">
-          {formatUsd(stats.totalBorrowed)}
+          {formatUsd(stats.totalDebt)}
         </p>
       </Card>
       <Card>

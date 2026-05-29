@@ -10,6 +10,13 @@ export function BorrowerView() {
 
   const repay = async (id: string, amount: number) => {
     // Mock blockchain tx — replace with wagmi writeContract once wired.
+    //
+    // TODO (indexer-wire-up): rewrite as a `borrowShares` shrink. With real
+    // data the loan no longer carries `principal` / `accruedInterest`; debt
+    // is derived from `borrowShares × totalBorrowAssets / totalBorrowShares`
+    // on the joined market. Repay reduces `borrowShares` proportionally
+    // (`newShares = borrowShares × (1 - amount / currentDebt)`) and the
+    // health factor recomputes from a live oracle price.
     await new Promise((resolve) => setTimeout(resolve, 1200));
     setLoans((prev) =>
       prev.flatMap((loan) => {
@@ -25,6 +32,7 @@ export function BorrowerView() {
         return [
           {
             ...loan,
+            borrowShares: loan.borrowShares * ratio,
             principal: {
               amount: loan.principal.amount * ratio,
               usd: loan.principal.usd * ratio,
@@ -34,7 +42,7 @@ export function BorrowerView() {
               usd: loan.accruedInterest.usd * ratio,
             },
             healthFactor:
-              (loan.collateralPosted.usd * loan.lltv) / newDebtUsd,
+              (loan.collateral.usd * loan.lltv) / newDebtUsd,
           },
         ];
       }),
