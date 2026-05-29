@@ -205,8 +205,19 @@ The Bivium protocol contracts live in `apps/contracts/` (Foundry). The web app t
 | Read per-token rates | `useLenderRates(tokens)` | lender's EOA |
 | Atomic multi-market repay | `useRepay` (`useBiviumRouterWrite`) | Router |
 | Wallet token balance | `useTokenBalance` | any ERC-20 |
+| Read EIP-7702 delegation status | `useProfileDelegation` | connected EOA |
+| Sign + send 7702 set-code tx | `useActivateProfile` | connected EOA |
 
 Each write hook returns `{ <action>, hash, isPending, isConfirming, isSuccess, error, reset }` — wire button "Confirming…" off `isPending || isConfirming`, refresh local state on `isSuccess`.
+
+### EIP-7702 onboarding
+
+Lender-side writes (`setRate`, `setAllowedCollaterals`, `pause`/`unpause`) are gated by `onlySelf` on the BiviumProfile — they only succeed when the EOA's code is the Profile delegation. Until the EOA delegates, every preference card's Save will revert.
+
+- **Detect delegation**: `useProfileDelegation()` reads `getCode(address)` and parses the `0xef0100 || target` EIP-7702 designator. `isDelegated` is `true` only when the target matches `NEXT_PUBLIC_BIVIUM_PROFILE_ADDRESS`.
+- **Activate**: `useActivateProfile()` calls viem's `walletClient.signAuthorization({ executor: "self" })` then `walletClient.sendTransaction({ to: self, data: "0x", authorizationList })`. Wallets that don't yet ship EIP-7702 surface as `notSupported: true`. wagmi 2.19 doesn't ship `useSignAuthorization` yet — we use the walletClient directly.
+- **UI entry point**: `DashboardView` branches the Lender tab: when `connected && !isDelegated && profileAddress`, it renders `ActivateProfileCard` (which opens `OnboardingModal`); otherwise it renders the normal lender content. When `NEXT_PUBLIC_BIVIUM_PROFILE_ADDRESS` is **not** set, the gate is bypassed so devs can still iterate on the lender UI locally without a live Profile.
+- **Wizard shape**: `OnboardingModal` walks `intro → delegating → pick-rates → submitting-rates → pick-collateral → submitting-collateral → done`. Steps 2 and 3 reuse `useSetRate` and `useSetAllowedCollaterals` — one `setRate` tx per selected asset (the Profile has no multicall), then one bulk `setAllowedCollaterals` tx. "Close & finish later" is allowed after delegation lands.
 
 **Rate units.** `BiviumProfile.setRate` takes `ratePerSecond` as a 1e18 fixed-point bigint. Convert from a human percent with `annualRateToRatePerSecond(annual)` from `useLenderProfileWrite.ts`; convert back with `ratePerSecondToAnnual(rps)`.
 

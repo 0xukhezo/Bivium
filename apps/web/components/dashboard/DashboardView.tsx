@@ -10,6 +10,8 @@ import { MyMarketsCard } from "./MyMarketsCard";
 import { LendingAssetsCard } from "./LendingAssetsCard";
 import { CollateralAssetsCard } from "./CollateralAssetsCard";
 import { BorrowerView } from "./BorrowerView";
+import { ActivateProfileCard } from "./ActivateProfileCard";
+import { useProfileDelegation } from "@/hooks/useProfileDelegation";
 import { cn } from "@/lib/utils";
 
 type View = "lender" | "borrower";
@@ -18,10 +20,15 @@ export function DashboardView() {
   const mounted = useMounted();
   const { isConnected } = useAccount();
   const [view, setView] = useState<View>("lender");
+  const { isDelegated, profileAddress } = useProfileDelegation();
 
   // Gate behind a real connection; the mounted guard keeps SSR and the first
   // client render in sync (both show the prompt) to avoid hydration mismatch.
   const connected = mounted && isConnected;
+  // Lender content is only meaningful once the EOA delegates to the Profile.
+  // When the template address isn't configured we fall through to the regular
+  // lender content so dev can still iterate locally without 7702 set up.
+  const needsActivation = connected && view === "lender" && !!profileAddress && !isDelegated;
 
   return (
     <>
@@ -74,13 +81,17 @@ export function DashboardView() {
           </div>
 
           {view === "lender" ? (
-            <div className="flex flex-col gap-6">
-              <MyMarketsCard />
-              <div className="grid gap-6 lg:grid-cols-2">
-                <LendingAssetsCard />
-                <CollateralAssetsCard />
+            needsActivation ? (
+              <ActivateProfileCard />
+            ) : (
+              <div className="flex flex-col gap-6">
+                <MyMarketsCard />
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <LendingAssetsCard />
+                  <CollateralAssetsCard />
+                </div>
               </div>
-            </div>
+            )
           ) : (
             <BorrowerView />
           )}

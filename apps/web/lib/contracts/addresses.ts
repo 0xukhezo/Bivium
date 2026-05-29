@@ -23,6 +23,10 @@ export const CONTRACT_ADDRESSES = {
   bivium: readAddress("NEXT_PUBLIC_BIVIUM_ADDRESS"),
   router: readAddress("NEXT_PUBLIC_BIVIUM_ROUTER_ADDRESS"),
   eventEmitter: readAddress("NEXT_PUBLIC_BIVIUM_EVENT_EMITTER_ADDRESS"),
+  // BiviumProfile template — the contract every lender's EOA delegates to via
+  // EIP-7702. Same address for all lenders; per-lender storage lives on the
+  // EOA itself (ERC-7201 namespacing inside the template).
+  profile: readAddress("NEXT_PUBLIC_BIVIUM_PROFILE_ADDRESS"),
 } as const;
 
 export const CONTRACTS_CHAIN_ID = arbitrum.id;
