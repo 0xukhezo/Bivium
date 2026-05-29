@@ -7,7 +7,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Bivium — Be your own Aave",
   description:
-    "A lending primitive where each EOA becomes a single-lender venue. Two paths. One loan. No pool.",
+    "A lending primitive where each EOA becomes a single-lender venue on Arbitrum, powered by EIP-7702.",
   metadataBase: new URL("https://bivium.xyz"),
 };
 

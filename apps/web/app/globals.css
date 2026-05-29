@@ -166,6 +166,121 @@
   animation: orderbook-depth-in 680ms cubic-bezier(.22, 1, .36, 1) forwards;
 }
 
+/* ── 3D borrow-flow diagram ───────────────────────────────────────────
+   A perspective stage with depth-layered nodes, an iso floor grid, and
+   particles travelling along bezier paths via `offset-path`. All effects
+   are pure CSS — no three.js, no canvas. */
+
+@keyframes flow-dash {
+  to { stroke-dashoffset: -20; }
+}
+.flow-arc {
+  stroke-dasharray: 4 6;
+  animation: flow-dash 1800ms linear infinite;
+}
+
+@keyframes node-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 0.95; transform: scale(1.07); }
+}
+.flow-node-pulse {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: node-pulse 3200ms cubic-bezier(.22, 1, .36, 1) infinite;
+}
+
+/* The whole stage tilts back into the page — gives every layered child
+   real perspective without `transform-style: preserve-3d` per node. */
+.scene-3d {
+  perspective: 1400px;
+  perspective-origin: 50% 30%;
+}
+.stage-3d {
+  transform-style: preserve-3d;
+  transform: rotateX(18deg) rotateY(-6deg);
+  transition: transform 800ms cubic-bezier(.22, 1, .36, 1);
+}
+
+/* A "puck" node — sits above the floor by translateZ. We also bob it
+   gently on the Y axis to suggest weightless float. */
+@keyframes node-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+.node-float { animation: node-float 5200ms cubic-bezier(.45, 0, .55, 1) infinite; }
+.node-float-delay-1 { animation-delay: -1300ms; }
+.node-float-delay-2 { animation-delay: -2600ms; }
+.node-float-delay-3 { animation-delay: -3900ms; }
+
+/* A long, soft shadow cast onto the floor underneath each puck. */
+.node-shadow {
+  filter: blur(14px);
+  opacity: .35;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,.85) 0%, rgba(0,0,0,0) 70%);
+}
+
+/* Floor grid — a CSS conic + linear gradient lattice that fades to
+   transparent at the horizon, giving a Tron-style infinity mat. */
+.floor-grid {
+  background-image:
+    linear-gradient(to right,  rgba(20,242,252,.16) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(20,242,252,.10) 1px, transparent 1px);
+  background-size: 40px 40px;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 0%, #000 30%, transparent 75%);
+          mask-image: radial-gradient(ellipse at 50% 0%, #000 30%, transparent 75%);
+}
+
+/* Travelling particles. Each child uses `offset-path` with its own
+   M..C..C curve; we set offset-distance from 0% → 100% on a loop. */
+@keyframes flow-particle {
+  0%   { offset-distance: 0%;   opacity: 0;   }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0;   }
+}
+.flow-particle {
+  position: absolute;
+  inset: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(20,242,252,1) 0%, rgba(20,242,252,.55) 40%, transparent 70%);
+  box-shadow: 0 0 8px rgba(20,242,252,.85), 0 0 18px rgba(20,242,252,.45);
+  animation: flow-particle 2800ms linear infinite;
+  will-change: offset-distance, opacity;
+}
+
+/* Page-level film grain. Almost invisible, but it kills the "AI plastic"
+   look on flat surfaces and is one of the cheapest senior tells. */
+.bg-grain::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: .035;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .85 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* Blueprint section background — faint grid plus radial soft light. */
+.bg-blueprint {
+  background-image:
+    radial-gradient(ellipse 60% 50% at 50% 40%, rgba(20,242,252,.10), transparent 60%),
+    linear-gradient(to right,  rgba(148,166,200,.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148,166,200,.08) 1px, transparent 1px);
+  background-size: 100% 100%, 56px 56px, 56px 56px;
+}
+
+/* Hairline rule + dot motif used by SectionEyebrow. */
+@keyframes eyebrow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(20,242,252,.55); }
+  50%      { box-shadow: 0 0 0 4px rgba(20,242,252,0); }
+}
+.eyebrow-dot {
+  animation: eyebrow-pulse 2400ms cubic-bezier(.22, 1, .36, 1) infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
