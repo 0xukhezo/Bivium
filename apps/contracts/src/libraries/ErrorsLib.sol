@@ -88,4 +88,16 @@ library ErrorsLib {
 
     /// @notice Thrown when the maximum uint128 is exceeded.
     string internal constant MAX_UINT128_EXCEEDED = "max uint128 exceeded";
+
+    /// @notice Thrown when a Chainlink feed passed to an oracle is the zero address.
+    string internal constant ZERO_FEED = "zero feed";
+
+    /// @notice Thrown when a Chainlink feed answer is zero or negative.
+    string internal constant NON_POSITIVE_ANSWER = "non-positive answer";
+
+    /// @notice Thrown when a Chainlink feed has not been updated within its allowed staleness window.
+    string internal constant STALE_PRICE = "stale price";
+
+    /// @notice Thrown when the oracle factory is asked to deploy an oracle that already exists.
+    string internal constant ORACLE_ALREADY_DEPLOYED = "oracle already deployed";
 }

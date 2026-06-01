@@ -12,6 +12,8 @@
 		"clean": "forge clean",
 		"deploy-check:arbitrum": "set -a && . ./.env && set +a && forge script script/Deploy.s.sol --rpc-url arbitrum --private-key $PRIVATE_KEY -vvvv",
 		"deploy:arbitrum": "set -a && . ./.env && set +a && forge script script/Deploy.s.sol --rpc-url arbitrum --private-key $PRIVATE_KEY --broadcast --verify -vvvv --slow",
+		"deploy-oracle-factory-check:arbitrum": "set -a && . ./.env && set +a && forge script script/DeployOracleFactory.s.sol --rpc-url arbitrum --private-key $PRIVATE_KEY -vvvv",
+		"deploy-oracle-factory:arbitrum": "set -a && . ./.env && set +a && forge script script/DeployOracleFactory.s.sol --rpc-url arbitrum --private-key $PRIVATE_KEY --broadcast --verify -vvvv --slow",
 		"curate-token-check:arbitrum": "set -a && . ./.env && set +a && forge script script/CurateToken.s.sol --rpc-url arbitrum --private-key $PRIVATE_KEY -vvvv",
 		"curate-token:arbitrum": "set -a && . ./.env && set +a && forge script script/CurateToken.s.sol --rpc-url arbitrum --private-key $PRIVATE_KEY --broadcast -vvvv --slow",
 		"curate-batch-check:arbitrum": "set -a && . ./.env && set +a && forge script script/CurateBatchArbitrum.s.sol --rpc-url arbitrum --private-key $PRIVATE_KEY -vvvv",
