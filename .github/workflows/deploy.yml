@@ -1,0 +1,86 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Lint & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build
+        run: pnpm build
+
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    needs: validate
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+
+            cd ~/bivium
+
+            # Discard any local changes and pull latest
+            git checkout -- .
+            git pull origin main
+
+            # Build and (re)start the stack
+            docker compose -f docker/docker-compose.prod.yml build
+            docker compose -f docker/docker-compose.prod.yml up -d
+
+            # Wait for services to be ready
+            sleep 5
+
+            # Run database migrations (Prisma — `public` schema only;
+            # indexer schema is owned by Ponder and auto-managed)
+            docker compose -f docker/docker-compose.prod.yml exec -T \
+              -w /app/packages/infrastructure api \
+              sh -c './node_modules/.bin/prisma migrate deploy --schema=./src/prisma/schema'
+
+            # Conditional seed (if commit message contains [run-seeds])
+            LAST_COMMIT_MSG=$(git log -1 --pretty=%B)
+            if echo "$LAST_COMMIT_MSG" | grep -q "\[run-seeds\]"; then
+              echo "Running database seeds..."
+              docker compose -f docker/docker-compose.prod.yml exec -T \
+                -w /app/packages/infrastructure api \
+                sh -c 'node ../../node_modules/.bin/tsx src/prisma/seed/index.ts'
+            fi
+
+            # Verify services are running
+            docker compose -f docker/docker-compose.prod.yml ps
+
+            echo "Deploy completed successfully"

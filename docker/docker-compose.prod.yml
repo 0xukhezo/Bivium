@@ -1,0 +1,158 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: bivium-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bivium}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bivium}
+      POSTGRES_DB: ${POSTGRES_DB:-bivium}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bivium} -d ${POSTGRES_DB:-bivium}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - app-network
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: bivium-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-bivium}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-bivium}
+      RABBITMQ_DEFAULT_VHOST: /
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    networks:
+      - app-network
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        APP: api
+    container_name: bivium-api
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-bivium}:${POSTGRES_PASSWORD:-bivium}@postgres:5432/${POSTGRES_DB:-bivium}?schema=public
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-bivium}:${RABBITMQ_PASSWORD:-bivium}@rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  jobs:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        APP: jobs
+    container_name: bivium-jobs
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-bivium}:${POSTGRES_PASSWORD:-bivium}@postgres:5432/${POSTGRES_DB:-bivium}?schema=public
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-bivium}:${RABBITMQ_PASSWORD:-bivium}@rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  reactor:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        APP: reactor
+    container_name: bivium-reactor
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-bivium}:${POSTGRES_PASSWORD:-bivium}@postgres:5432/${POSTGRES_DB:-bivium}?schema=public
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-bivium}:${RABBITMQ_PASSWORD:-bivium}@rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  watcher:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        APP: watcher
+    container_name: bivium-watcher
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-bivium}:${POSTGRES_PASSWORD:-bivium}@postgres:5432/${POSTGRES_DB:-bivium}?schema=public
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-bivium}:${RABBITMQ_PASSWORD:-bivium}@rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  indexer:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.indexer
+    container_name: bivium-indexer
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-bivium}:${POSTGRES_PASSWORD:-bivium}@postgres:5432/${POSTGRES_DB:-bivium}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: bivium-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - watcher
+    networks:
+      - app-network
+
+volumes:
+  pgdata:
+  rabbitmqdata:
+  caddy_data:
+  caddy_config:
+
+networks:
+  app-network:
+    driver: bridge

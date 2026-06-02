@@ -1,0 +1,14 @@
+100-51-51-210.nip.io {
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle /webhooks/* {
+		uri strip_prefix /webhooks
+		reverse_proxy watcher:3001
+	}
+
+	handle {
+		respond "Bivium" 200
+	}
+}
