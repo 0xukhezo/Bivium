@@ -31,11 +31,11 @@ jobs:
       - name: Generate Prisma client
         run: pnpm prisma:generate
 
-      - name: Lint
-        run: pnpm lint
+      - name: Lint (backend only — web is gated in ci.yml/Vercel)
+        run: pnpm exec biome lint apps/api apps/jobs apps/reactor apps/watcher apps/indexer packages
 
-      - name: Build
-        run: pnpm build
+      - name: Build (skip web + contracts — deployed elsewhere)
+        run: pnpm exec turbo run build --filter='!web' --filter='!contracts'
 
   deploy:
     name: Deploy to EC2
