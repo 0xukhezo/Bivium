@@ -1,6 +1,8 @@
 import { ContainerModule, type ContainerModuleLoadOptions } from "inversify";
 import { APPLICATION_TYPES } from "../types.js";
+import { UpdateAssetPricesCommandHandler } from "../usecases/assets/commands/UpdateAssetPricesCommandHandler.js";
 import { UpdateBalanceHistoryCommandHandler } from "../usecases/balances/commands/UpdateBalanceHistoryCommandHandler.js";
+import { GetMarketSummariesQueryHandler } from "../usecases/markets/queries/GetMarketSummariesQueryHandler.js";
 import { OutboxPollerService } from "../usecases/outbox/services/OutboxPollerService.js";
 import { ProcessOnchainEventCommandHandler } from "../usecases/webhooks/commands/process/ProcessOnchainEventCommandHandler.js";
 import { SaveOnchainEventsCommandHandler } from "../usecases/webhooks/commands/SaveOnchainEventsCommandHandler.js";
@@ -17,6 +19,14 @@ export const applicationModule = new ContainerModule(
 
 		bind(APPLICATION_TYPES.UpdateBalanceHistoryCommandHandler)
 			.to(UpdateBalanceHistoryCommandHandler)
+			.inSingletonScope();
+
+		bind(APPLICATION_TYPES.UpdateAssetPricesCommandHandler)
+			.to(UpdateAssetPricesCommandHandler)
+			.inSingletonScope();
+
+		bind(APPLICATION_TYPES.GetMarketSummariesQueryHandler)
+			.to(GetMarketSummariesQueryHandler)
 			.inSingletonScope();
 
 		bind(APPLICATION_TYPES.OutboxPollerService)

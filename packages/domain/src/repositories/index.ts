@@ -1,4 +1,6 @@
 export * from "./IOnchainEventRepository.js";
 export * from "./IUserRepository.js";
 export * from "./IAssetRepository.js";
+export * from "./IAssetPriceRepository.js";
+export * from "./IMarketSummaryRepository.js";
 export * from "./IUserCurrentBalanceRepository.js";

@@ -4,6 +4,11 @@ export * from "./repositories/index.js";
 export * from "./mappers/index.js";
 export * from "./services/index.js";
 export * from "./clients/AlchemyClient.js";
+export * from "./clients/LiFiClient.js";
 export * from "./messaging/index.js";
 export * from "./events/index.js";
-export { repositoryModule, portsModule } from "./container/index.js";
+export {
+	repositoryModule,
+	portsModule,
+	serviceModule,
+} from "./container/index.js";

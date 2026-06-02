@@ -2,12 +2,18 @@ export const DOMAIN_REPOSITORY_TYPES = {
 	OnchainEventRepository: Symbol.for("OnchainEventRepository"),
 	UserRepository: Symbol.for("UserRepository"),
 	AssetRepository: Symbol.for("AssetRepository"),
+	AssetPriceRepository: Symbol.for("AssetPriceRepository"),
 	UserCurrentBalanceRepository: Symbol.for("UserCurrentBalanceRepository"),
+	MarketSummaryRepository: Symbol.for("MarketSummaryRepository"),
 } as const;
 
-export const DOMAIN_SERVICE_TYPES = {} as const;
+export const DOMAIN_SERVICE_TYPES = {
+	LiFiPriceFetcher: Symbol.for("LiFiPriceFetcher"),
+} as const;
 
-export const DOMAIN_CONFIG_TYPES = {} as const;
+export const DOMAIN_CONFIG_TYPES = {
+	LiFiClientConfig: Symbol.for("LiFiClientConfig"),
+} as const;
 
 export const DOMAIN_TYPES = {
 	...DOMAIN_REPOSITORY_TYPES,

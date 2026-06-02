@@ -9,6 +9,12 @@ export const APPLICATION_TYPES = {
 	UpdateBalanceHistoryCommandHandler: Symbol.for(
 		"UpdateBalanceHistoryCommandHandler",
 	),
+	UpdateAssetPricesCommandHandler: Symbol.for(
+		"UpdateAssetPricesCommandHandler",
+	),
+	GetMarketSummariesQueryHandler: Symbol.for(
+		"GetMarketSummariesQueryHandler",
+	),
 	OutboxPollerService: Symbol.for("OutboxPollerService"),
 
 	// Ports

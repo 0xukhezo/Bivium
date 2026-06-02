@@ -12,6 +12,14 @@ export interface FindOrCreateAssetInput {
 	logoUrl?: string | null;
 }
 
+export interface UpsertAssetInput extends FindOrCreateAssetInput {}
+
 export interface IAssetRepository {
 	findOrCreate(input: FindOrCreateAssetInput): Promise<Asset>;
+	upsert(input: UpsertAssetInput): Promise<Asset>;
+	listByChain(chainId: number): Promise<Asset[]>;
+	findManyByAddresses(input: {
+		chainId: number;
+		addresses: string[];
+	}): Promise<Asset[]>;
 }

@@ -17,6 +17,8 @@
 		"dev:reactor": "pnpm --dir apps/reactor dev",
 		"start:watcher": "pnpm --dir apps/watcher start",
 		"dev:watcher": "pnpm --dir apps/watcher dev",
+		"start:jobs": "pnpm --dir apps/jobs start",
+		"dev:jobs": "pnpm --dir apps/jobs dev",
 		"dev:web": "pnpm --dir apps/web dev",
 		"build:web": "pnpm --dir apps/web build",
 		"start:web": "pnpm --dir apps/web start",

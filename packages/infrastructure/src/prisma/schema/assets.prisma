@@ -11,7 +11,20 @@ model Asset {
   updatedAt DateTime  @updatedAt @map("updated_at")
 
   balances UserCurrentBalance[]
+  price    AssetPrice?
 
   @@unique([chainId, address])
   @@map("assets")
+}
+
+model AssetPrice {
+  assetId   String   @id @map("asset_id")
+  priceUsd  Decimal  @map("price_usd") @db.Decimal(38, 18)
+  source    String
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@map("asset_prices")
 }

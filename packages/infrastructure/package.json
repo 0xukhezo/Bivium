@@ -19,6 +19,7 @@
 		"db:migrate": "prisma migrate dev --schema=./src/prisma/schema",
 		"db:deploy": "prisma migrate deploy --schema=./src/prisma/schema",
 		"db:reset": "prisma migrate reset --schema=./src/prisma/schema",
+		"db:seed": "tsx src/prisma/seed/index.ts",
 		"prebuild": "pnpm run prisma:generate",
 		"build": "tsc -b",
 		"typecheck": "tsc -b --noEmit"

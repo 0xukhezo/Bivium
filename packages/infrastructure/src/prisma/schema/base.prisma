@@ -7,4 +7,6 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  // The indexer (Ponder) schema is intentionally NOT listed here — it is
+  // owned by apps/indexer and read via raw SQL (see MarketSummaryRepository).
 }
