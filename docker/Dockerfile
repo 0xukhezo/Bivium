@@ -36,7 +36,8 @@ RUN pnpm install --frozen-lockfile
 FROM deps AS build
 COPY . .
 RUN pnpm prisma:generate
-RUN pnpm build
+# Skip `web` (Vercel) and `contracts` (Foundry, needs forge) — they are not shipped from this image
+RUN pnpm exec turbo run build --filter='!web' --filter='!contracts'
 
 # Keep prisma schema folder (needed for `prisma migrate deploy`) and drop sources
 RUN cp -r packages/infrastructure/src/prisma /tmp/prisma-backup \
