@@ -72,12 +72,15 @@ jobs:
               sh -c './node_modules/.bin/prisma migrate deploy --schema=./src/prisma/schema'
 
             # Conditional seed (if commit message contains [run-seeds])
+            # Runs the compiled seed from dist/. The TS source isn't shipped
+            # in the image (Dockerfile drops packages/*/src), so invoking tsx
+            # against src/ would fail with ERR_MODULE_NOT_FOUND.
             LAST_COMMIT_MSG=$(git log -1 --pretty=%B)
             if echo "$LAST_COMMIT_MSG" | grep -q "\[run-seeds\]"; then
               echo "Running database seeds..."
               docker compose -f docker/docker-compose.prod.yml exec -T \
                 -w /app/packages/infrastructure api \
-                sh -c 'node ../../node_modules/.bin/tsx src/prisma/seed/index.ts'
+                node dist/prisma/seed/index.js
             fi
 
             # Verify services are running
