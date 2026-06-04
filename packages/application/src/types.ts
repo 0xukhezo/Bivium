@@ -16,6 +16,9 @@ export const APPLICATION_TYPES = {
 	GetLenderMarketsQueryHandler: Symbol.for("GetLenderMarketsQueryHandler"),
 	GetBorrowerLoansQueryHandler: Symbol.for("GetBorrowerLoansQueryHandler"),
 	GetMarketDepthQueryHandler: Symbol.for("GetMarketDepthQueryHandler"),
+	SyncLenderWebhookAddressesCommandHandler: Symbol.for(
+		"SyncLenderWebhookAddressesCommandHandler",
+	),
 	OutboxPollerService: Symbol.for("OutboxPollerService"),
 
 	// Ports
@@ -26,4 +29,5 @@ export const APPLICATION_TYPES = {
 	PostCommitFlusher: Symbol.for("PostCommitFlusher"),
 	TransactionManager: Symbol.for("TransactionManager"),
 	AlchemyBalanceFetcher: Symbol.for("AlchemyBalanceFetcher"),
+	AlchemyWebhookAddressManager: Symbol.for("AlchemyWebhookAddressManager"),
 } as const;

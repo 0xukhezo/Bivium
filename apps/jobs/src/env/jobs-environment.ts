@@ -8,6 +8,9 @@ const schema = z.object({
 	LIFI_API_KEY: z.string().optional(),
 	LIFI_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
 	PRICE_REFRESH_CRON: z.string().default("*/2 * * * *"),
+	ALCHEMY_NOTIFY_AUTH_TOKEN: z.string().min(1).optional(),
+	ALCHEMY_WEBHOOK_ID: z.string().min(1).optional(),
+	LENDER_WEBHOOK_SYNC_CRON: z.string().default("*/1 * * * *"),
 });
 
 export type JobsEnvSchema = z.infer<typeof schema>;
@@ -38,6 +41,15 @@ class JobsEnvironment extends Environment {
 	}
 	get priceRefreshCron(): string {
 		return this.values.PRICE_REFRESH_CRON;
+	}
+	get alchemyNotifyAuthToken(): string | undefined {
+		return this.values.ALCHEMY_NOTIFY_AUTH_TOKEN;
+	}
+	get alchemyWebhookId(): string | undefined {
+		return this.values.ALCHEMY_WEBHOOK_ID;
+	}
+	get lenderWebhookSyncCron(): string {
+		return this.values.LENDER_WEBHOOK_SYNC_CRON;
 	}
 }
 

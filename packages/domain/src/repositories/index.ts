@@ -5,5 +5,6 @@ export * from "./IAssetPriceRepository.js";
 export * from "./IMarketSummaryRepository.js";
 export * from "./ILenderMarketSummaryRepository.js";
 export * from "./IBorrowerLoanRepository.js";
+export * from "./IIndexerLenderReadRepository.js";
 export * from "./IMarketDepthRepository.js";
 export * from "./IUserCurrentBalanceRepository.js";

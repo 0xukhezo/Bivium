@@ -3,6 +3,7 @@ import { ContainerModule, type ContainerModuleLoadOptions } from "inversify";
 import { AssetPriceRepository } from "../repositories/AssetPriceRepository.js";
 import { AssetRepository } from "../repositories/AssetRepository.js";
 import { BorrowerLoanRepository } from "../repositories/BorrowerLoanRepository.js";
+import { IndexerLenderReadRepository } from "../repositories/IndexerLenderReadRepository.js";
 import { LenderMarketSummaryRepository } from "../repositories/LenderMarketSummaryRepository.js";
 import { MarketDepthRepository } from "../repositories/MarketDepthRepository.js";
 import { MarketSummaryRepository } from "../repositories/MarketSummaryRepository.js";
@@ -31,6 +32,9 @@ export const repositoryModule = new ContainerModule(
 			.inSingletonScope();
 		bind(DOMAIN_TYPES.MarketDepthRepository)
 			.to(MarketDepthRepository)
+			.inSingletonScope();
+		bind(DOMAIN_TYPES.IndexerLenderReadRepository)
+			.to(IndexerLenderReadRepository)
 			.inSingletonScope();
 		bind(DOMAIN_TYPES.UserCurrentBalanceRepository)
 			.to(UserCurrentBalanceRepository)

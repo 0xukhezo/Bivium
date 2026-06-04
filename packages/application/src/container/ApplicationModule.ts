@@ -8,6 +8,7 @@ import { GetMarketDepthQueryHandler } from "../usecases/markets/queries/GetMarke
 import { GetMarketSummariesQueryHandler } from "../usecases/markets/queries/GetMarketSummariesQueryHandler.js";
 import { OutboxPollerService } from "../usecases/outbox/services/OutboxPollerService.js";
 import { SaveOnchainEventsCommandHandler } from "../usecases/webhooks/commands/SaveOnchainEventsCommandHandler.js";
+import { SyncLenderWebhookAddressesCommandHandler } from "../usecases/webhooks/commands/SyncLenderWebhookAddressesCommandHandler.js";
 import { ProcessOnchainEventCommandHandler } from "../usecases/webhooks/commands/process/ProcessOnchainEventCommandHandler.js";
 
 export const applicationModule = new ContainerModule(
@@ -42,6 +43,10 @@ export const applicationModule = new ContainerModule(
 
 		bind(APPLICATION_TYPES.GetMarketDepthQueryHandler)
 			.to(GetMarketDepthQueryHandler)
+			.inSingletonScope();
+
+		bind(APPLICATION_TYPES.SyncLenderWebhookAddressesCommandHandler)
+			.to(SyncLenderWebhookAddressesCommandHandler)
 			.inSingletonScope();
 
 		bind(APPLICATION_TYPES.OutboxPollerService)

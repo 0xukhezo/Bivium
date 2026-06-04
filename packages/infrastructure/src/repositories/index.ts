@@ -6,6 +6,7 @@ export * from "./AssetPriceRepository.js";
 export * from "./MarketSummaryRepository.js";
 export * from "./LenderMarketSummaryRepository.js";
 export * from "./BorrowerLoanRepository.js";
+export * from "./IndexerLenderReadRepository.js";
 export * from "./MarketDepthRepository.js";
 export * from "./UserCurrentBalanceRepository.js";
 export * from "./OutboxEventRepository.js";
