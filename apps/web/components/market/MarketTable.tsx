@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, AlertCircle } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import {
   nextSort,
@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/SortableHeader";
 import { TokenFilterDropdown } from "@/components/market/TokenFilterDropdown";
 import { SUPPORTED_TOKENS, type Token } from "@/lib/tokens";
-import { MOCK_MARKETS, getMarketSlug, type Market } from "@/lib/markets";
+import { getMarketSlug, type Market } from "@/lib/markets";
+import { useMarkets } from "@/hooks/useMarkets";
 import { formatCompact, formatPercent, formatUsd } from "@/lib/utils";
 
 const PAGE_SIZE = 9;
@@ -50,6 +51,12 @@ export function MarketTable() {
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
   const [page, setPage] = useState(1);
 
+  // Live markets from /api/v1/markets. Loading / error / empty are rendered
+  // inline below so the filter chrome stays present (lets the user retry from
+  // the same toolbar position).
+  const marketsQuery = useMarkets();
+  const markets = useMemo(() => marketsQuery.data ?? [], [marketsQuery.data]);
+
   const toggleToken = (address: string) => {
     setSelectedAddresses((prev) => {
       const next = new Set(prev);
@@ -68,7 +75,7 @@ export function MarketTable() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return MOCK_MARKETS.filter((m) => {
+    return markets.filter((m) => {
       if (selectedAddresses.size > 0) {
         const c = m.collateralToken.address.toLowerCase();
         const l = m.loanToken.address.toLowerCase();
@@ -82,7 +89,7 @@ export function MarketTable() {
       }
       return true;
     });
-  }, [query, selectedAddresses]);
+  }, [markets, query, selectedAddresses]);
 
   const sorted = useMemo(() => {
     if (!sort) return filtered;
@@ -116,7 +123,36 @@ export function MarketTable() {
         />
       </div>
 
-      {sorted.length === 0 ? (
+      {marketsQuery.isLoading ? (
+        <SkeletonTable rows={PAGE_SIZE} />
+      ) : marketsQuery.isError ? (
+        <div className="rounded-md border border-danger/40 bg-danger/10 px-4 py-10 text-center">
+          <AlertCircle
+            size={20}
+            className="mx-auto text-danger"
+            aria-hidden="true"
+          />
+          <p className="mt-3 font-medium text-text-primary">
+            Couldn&apos;t load markets
+          </p>
+          <p className="mt-1 text-sm text-text-secondary">
+            {readableFetchError(marketsQuery.error)}
+          </p>
+          <button
+            type="button"
+            onClick={() => marketsQuery.refetch()}
+            className="mt-4 inline-flex h-9 items-center rounded-md border border-border bg-bg px-4 text-sm font-medium text-text-primary transition-colors duration-base ease-out-expo hover:border-accent"
+          >
+            Retry
+          </button>
+        </div>
+      ) : markets.length === 0 ? (
+        <div className="rounded-md border border-border bg-bg-sunken px-4 py-12 text-center">
+          <p className="text-text-secondary">
+            No markets have been created yet.
+          </p>
+        </div>
+      ) : sorted.length === 0 ? (
         <div className="rounded-md border border-border bg-bg-sunken px-4 py-12 text-center">
           <p className="text-text-secondary">
             No markets match the current filter.
@@ -258,4 +294,73 @@ function TokenCell({ token }: { token: Token }) {
       <span className="font-medium text-text-primary">{token.symbol}</span>
     </div>
   );
+}
+
+/** Pulse-skeleton rows that mirror the real table layout so the swap to
+ *  loaded data doesn't shift the page. */
+function SkeletonTable({ rows }: { rows: number }) {
+  return (
+    <div className="overflow-hidden rounded-md border border-border">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] text-sm">
+          <thead className="border-b border-border bg-bg-sunken text-xs tracking-wider text-text-muted">
+            <tr>
+              {["Collateral", "Loan", "LLTV", "Total Liquidity", "Total Borrowed", "Rate"].map(
+                (h, i) => (
+                  <th
+                    key={h}
+                    scope="col"
+                    className={`px-4 py-3 font-medium ${i === 5 ? "text-right" : "text-left"}`}
+                  >
+                    {h}
+                  </th>
+                ),
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: rows }).map((_, i) => (
+              <tr
+                key={i}
+                className="border-b border-border last:border-b-0"
+              >
+                <td className="px-4 py-4">
+                  <SkeletonBar widthClass="w-24" />
+                </td>
+                <td className="px-4 py-4">
+                  <SkeletonBar widthClass="w-24" />
+                </td>
+                <td className="px-4 py-4">
+                  <SkeletonBar widthClass="w-12" />
+                </td>
+                <td className="px-4 py-4">
+                  <SkeletonBar widthClass="w-28" />
+                </td>
+                <td className="px-4 py-4">
+                  <SkeletonBar widthClass="w-28" />
+                </td>
+                <td className="px-4 py-4 text-right">
+                  <SkeletonBar widthClass="w-16 ml-auto" />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SkeletonBar({ widthClass }: { widthClass: string }) {
+  return (
+    <span
+      aria-hidden
+      className={`block h-3 animate-pulse rounded bg-bg-elevated ${widthClass}`}
+    />
+  );
+}
+
+function readableFetchError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return "Network error.";
 }

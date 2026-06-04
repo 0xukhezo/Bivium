@@ -46,10 +46,18 @@ The product does not function without these.
 
 ### Indexer data wire-up
 
-- [ ] Add a **Ponder client** in `lib/` (GraphQL or REST — whichever the
-  indexer exposes). One module owns the fetch surface.
-- [ ] Replace `MOCK_MARKETS` (`lib/markets.ts`) with a real markets query.
-  Drives `MarketTable`, `MarketDetailPage`, `BorrowModal`, `LenderOrderbook`.
+- [x] **Backend API client** at `lib/api/client.ts` (`API_BASE`, env-overridable
+  via `NEXT_PUBLIC_BIVIUM_API_URL`).
+- [x] **Markets list** wired to `/api/v1/markets` via
+  `lib/api/markets.ts` + `hooks/useMarkets.ts`. `MarketTable` now renders
+  live markets, with skeleton-row loading, error + retry, and "no markets
+  created yet" empty states. Number → bigint conversion lives in the
+  adapter; consumers still see the existing `Market` shape.
+- [ ] **Market detail page** (`app/(app)/market/[pair]/page.tsx`) still
+  reads from `MOCK_MARKETS` via `getMarketByPair`. Either await
+  `fetchMarkets()` server-side or add a `/markets/:pair` detail endpoint
+  that returns the full `MarketParams` (oracle + creator), then update
+  `getMarketByPair` to fetch.
 - [ ] Replace `MOCK_LENDER_MARKETS` (`lib/lender.ts`) with a query that joins
   `markets` ⋈ aggregated `positions.collateral` filtered by `creator == self`.
   Drives `MyMarketsCard`.
@@ -58,8 +66,11 @@ The product does not function without these.
   `LendingAssetsCard` and `CollateralAssetsCard` still don't consume them.**
 - [ ] Replace `MOCK_BORROWER_LOANS` (`lib/borrower.ts`) with a positions query
   filtered by `borrower == self`, joined to `markets`. Drives `BorrowerView`.
-- [ ] Add loading skeletons for every list/table.
-- [ ] Add proper empty states (today there's only one).
+- [x] **Loading skeletons** for the markets list. Apply the same
+  `SkeletonTable` pattern to remaining tables (`MyMarketsCard`,
+  `MyLoansCard`) as they switch to live data.
+- [x] **Empty states** for the markets list (no-markets vs no-filter-matches
+  are now distinct). Carry the same pattern to the remaining lists.
 
 ### Number → bigint migration
 
