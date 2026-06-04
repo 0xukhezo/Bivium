@@ -1,5 +1,7 @@
 import { ContainerModule, type ContainerModuleLoadOptions } from "inversify";
+import { BorrowersController } from "../../presentation/borrowers/BorrowersController.js";
 import { HealthController } from "../../presentation/health/HealthController.js";
+import { LenderMarketsController } from "../../presentation/lenders/LenderMarketsController.js";
 import { MarketsController } from "../../presentation/markets/MarketsController.js";
 import { CONTROLLER_TYPES } from "./controllerTypes.js";
 
@@ -10,6 +12,12 @@ export const controllerBindings = new ContainerModule(
 			.inSingletonScope();
 		bind<MarketsController>(CONTROLLER_TYPES.MarketsController)
 			.to(MarketsController)
+			.inSingletonScope();
+		bind<LenderMarketsController>(CONTROLLER_TYPES.LenderMarketsController)
+			.to(LenderMarketsController)
+			.inSingletonScope();
+		bind<BorrowersController>(CONTROLLER_TYPES.BorrowersController)
+			.to(BorrowersController)
 			.inSingletonScope();
 	},
 );

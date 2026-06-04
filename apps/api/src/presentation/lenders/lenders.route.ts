@@ -1,14 +1,13 @@
 import { Router, type Router as RouterType } from "express";
 import { CONTROLLER_TYPES } from "../../container/controller/controllerTypes.js";
 import { container } from "../../inversify.config.js";
-import type { MarketsController } from "./MarketsController.js";
+import type { LenderMarketsController } from "./LenderMarketsController.js";
 
 const router: RouterType = Router();
-const controller = container.get<MarketsController>(
-	CONTROLLER_TYPES.MarketsController,
+const controller = container.get<LenderMarketsController>(
+	CONTROLLER_TYPES.LenderMarketsController,
 );
 
-router.get("/", controller.listMarkets);
-router.get("/:collateral/:loan/depth", controller.getMarketDepth);
+router.get("/:address/markets", controller.listLenderMarkets);
 
 export default router;

@@ -2,10 +2,13 @@ import { ContainerModule, type ContainerModuleLoadOptions } from "inversify";
 import { APPLICATION_TYPES } from "../types.js";
 import { UpdateAssetPricesCommandHandler } from "../usecases/assets/commands/UpdateAssetPricesCommandHandler.js";
 import { UpdateBalanceHistoryCommandHandler } from "../usecases/balances/commands/UpdateBalanceHistoryCommandHandler.js";
+import { GetBorrowerLoansQueryHandler } from "../usecases/borrowers/queries/GetBorrowerLoansQueryHandler.js";
+import { GetLenderMarketsQueryHandler } from "../usecases/markets/queries/GetLenderMarketsQueryHandler.js";
+import { GetMarketDepthQueryHandler } from "../usecases/markets/queries/GetMarketDepthQueryHandler.js";
 import { GetMarketSummariesQueryHandler } from "../usecases/markets/queries/GetMarketSummariesQueryHandler.js";
 import { OutboxPollerService } from "../usecases/outbox/services/OutboxPollerService.js";
-import { ProcessOnchainEventCommandHandler } from "../usecases/webhooks/commands/process/ProcessOnchainEventCommandHandler.js";
 import { SaveOnchainEventsCommandHandler } from "../usecases/webhooks/commands/SaveOnchainEventsCommandHandler.js";
+import { ProcessOnchainEventCommandHandler } from "../usecases/webhooks/commands/process/ProcessOnchainEventCommandHandler.js";
 
 export const applicationModule = new ContainerModule(
 	({ bind }: ContainerModuleLoadOptions) => {
@@ -27,6 +30,18 @@ export const applicationModule = new ContainerModule(
 
 		bind(APPLICATION_TYPES.GetMarketSummariesQueryHandler)
 			.to(GetMarketSummariesQueryHandler)
+			.inSingletonScope();
+
+		bind(APPLICATION_TYPES.GetLenderMarketsQueryHandler)
+			.to(GetLenderMarketsQueryHandler)
+			.inSingletonScope();
+
+		bind(APPLICATION_TYPES.GetBorrowerLoansQueryHandler)
+			.to(GetBorrowerLoansQueryHandler)
+			.inSingletonScope();
+
+		bind(APPLICATION_TYPES.GetMarketDepthQueryHandler)
+			.to(GetMarketDepthQueryHandler)
 			.inSingletonScope();
 
 		bind(APPLICATION_TYPES.OutboxPollerService)

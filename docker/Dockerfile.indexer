@@ -1,0 +1,42 @@
+# ==============================================================================
+# Dockerfile for the Ponder-based indexer (apps/indexer).
+# Isolated from the backend Dockerfile because the indexer is a bounded context
+# with its own dependency graph (Drizzle + Hono + viem, no @bivium/* imports)
+# and a different runtime: `ponder start` instead of `node dist/index.js`.
+# ==============================================================================
+
+FROM node:22-slim AS base
+RUN apt-get update -y \
+    && apt-get install -y openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
+WORKDIR /app
+
+# --- Dependencies ---
+FROM base AS deps
+
+# Workspace config — Ponder runs from the monorepo so pnpm needs the lockfile
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json .npmrc ./
+COPY apps/indexer/package.json apps/indexer/
+# The indexer doesn't import @bivium/* packages, but pnpm still needs to see
+# them in the workspace to resolve the lockfile coherently.
+COPY packages/common/package.json packages/common/
+COPY packages/domain/package.json packages/domain/
+COPY packages/application/package.json packages/application/
+COPY packages/infrastructure/package.json packages/infrastructure/
+COPY apps/api/package.json apps/api/
+COPY apps/jobs/package.json apps/jobs/
+COPY apps/reactor/package.json apps/reactor/
+COPY apps/watcher/package.json apps/watcher/
+
+RUN pnpm install --frozen-lockfile --filter @bivium/indexer...
+
+# --- Runtime ---
+FROM deps AS runtime
+COPY apps/indexer apps/indexer
+
+WORKDIR /app/apps/indexer
+# Ponder codegen runs at startup if needed; `ponder start` boots in production
+# mode and serves GraphQL on port 42069 by default.
+EXPOSE 42069
+CMD ["pnpm", "exec", "ponder", "start"]
