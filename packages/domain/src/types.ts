@@ -1,6 +1,5 @@
 export const DOMAIN_REPOSITORY_TYPES = {
 	OnchainEventRepository: Symbol.for("OnchainEventRepository"),
-	UserRepository: Symbol.for("UserRepository"),
 	AssetRepository: Symbol.for("AssetRepository"),
 	AssetPriceRepository: Symbol.for("AssetPriceRepository"),
 	UserCurrentBalanceRepository: Symbol.for("UserCurrentBalanceRepository"),
@@ -8,6 +7,7 @@ export const DOMAIN_REPOSITORY_TYPES = {
 	LenderMarketSummaryRepository: Symbol.for("LenderMarketSummaryRepository"),
 	BorrowerLoanRepository: Symbol.for("BorrowerLoanRepository"),
 	MarketDepthRepository: Symbol.for("MarketDepthRepository"),
+	IndexerLenderReadRepository: Symbol.for("IndexerLenderReadRepository"),
 } as const;
 
 export const DOMAIN_SERVICE_TYPES = {

@@ -1,14 +1,18 @@
+/// Current balance for a (wallet, asset) pair. Address-keyed because Bivium
+/// is non-custodial — the EOA *is* the user identity, no separate user
+/// record. `chainId` stays as a regular column for indexing; the canonical
+/// chain is implied by `assetId` (assets are unique per chain).
 model UserCurrentBalance {
-  userId      String   @map("user_id")
+  address     String   @map("address")
   assetId     String   @map("asset_id")
   chainId     Int      @map("chain_id")
   balance     Decimal  @db.Decimal(78, 0)
   lastUpdated DateTime @updatedAt @map("last_updated")
 
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
-  @@id([userId, assetId])
+  @@id([address, assetId])
   @@index([chainId])
+  @@index([address])
   @@map("user_current_balances")
 }

@@ -15,15 +15,10 @@ export class AssetRepository
 	implements IAssetRepository
 {
 	async findOrCreate(input: FindOrCreateAssetInput): Promise<Asset> {
-		const address = input.address?.toLowerCase() ?? null;
+		const address = input.address.toLowerCase();
 
 		const existing = await this.prisma.asset.findUnique({
-			where: {
-				chainId_address: {
-					chainId: input.chainId,
-					address: address as string,
-				},
-			},
+			where: { chainId_address: { chainId: input.chainId, address } },
 		});
 		if (existing) return mapPrismaAssetToDomain(existing);
 
@@ -42,15 +37,10 @@ export class AssetRepository
 	}
 
 	async upsert(input: UpsertAssetInput): Promise<Asset> {
-		const address = input.address?.toLowerCase() ?? null;
+		const address = input.address.toLowerCase();
 
 		const record = await this.prisma.asset.upsert({
-			where: {
-				chainId_address: {
-					chainId: input.chainId,
-					address: address as string,
-				},
-			},
+			where: { chainId_address: { chainId: input.chainId, address } },
 			create: {
 				chainId: input.chainId,
 				address,

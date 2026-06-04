@@ -3,8 +3,8 @@ import type { AssetType } from "../entities/AssetType.js";
 
 export interface FindOrCreateAssetInput {
 	chainId: number;
-	/** Token contract address; `null` for the chain's native asset. */
-	address: string | null;
+	/** Token address. Use `NATIVE_ASSET_ADDRESS` (`0x0…0`) for the chain's native asset. */
+	address: string;
 	symbol: string;
 	decimals: number;
 	type: AssetType;

@@ -2,7 +2,6 @@ import {
 	DOMAIN_TYPES,
 	type IAssetRepository,
 	type IUserCurrentBalanceRepository,
-	type IUserRepository,
 } from "@bivium/domain";
 import { inject, injectFromBase, injectable } from "inversify";
 import type { IAlchemyBalanceFetcherPort } from "../../../ports/IAlchemyBalanceFetcherPort.js";
@@ -13,6 +12,17 @@ import type {
 	UpdateBalanceHistoryCommandOutputDto,
 } from "../dtos/UpdateBalanceHistoryCommandDto.js";
 
+/**
+ * Refresh on-chain balances for the given wallet addresses via Alchemy and
+ * upsert them into `user_current_balances`.
+ *
+ * Bivium is non-custodial: there's no separate user record. Any address the
+ * watcher → reactor pipeline surfaces (because Alchemy notified an activity
+ * for it) is enrolled in the address-activity webhook by the sync job —
+ * meaning Bivium genuinely wants to track its balances. So we no longer
+ * gate on a `users` row existing; we upsert balances directly keyed by
+ * `(address, asset_id)`.
+ */
 @injectable()
 @injectFromBase()
 export class UpdateBalanceHistoryCommandHandler extends BaseUseCase<
@@ -22,8 +32,6 @@ export class UpdateBalanceHistoryCommandHandler extends BaseUseCase<
 	constructor(
 		@inject(APPLICATION_TYPES.AlchemyBalanceFetcher)
 		private readonly balanceFetcher: IAlchemyBalanceFetcherPort,
-		@inject(DOMAIN_TYPES.UserRepository)
-		private readonly userRepository: IUserRepository,
 		@inject(DOMAIN_TYPES.AssetRepository)
 		private readonly assetRepository: IAssetRepository,
 		@inject(DOMAIN_TYPES.UserCurrentBalanceRepository)
@@ -37,18 +45,9 @@ export class UpdateBalanceHistoryCommandHandler extends BaseUseCase<
 	): Promise<UpdateBalanceHistoryCommandOutputDto> {
 		let processedAddresses = 0;
 		let upsertedBalances = 0;
-		let skippedUnknownUsers = 0;
 
-		for (const address of input.addresses) {
-			const user = await this.userRepository.findByAddress(address);
-			if (!user) {
-				skippedUnknownUsers++;
-				this.logger.debug("Skipping balance refresh for unknown wallet", {
-					address,
-				});
-				continue;
-			}
-
+		for (const rawAddress of input.addresses) {
+			const address = rawAddress.toLowerCase();
 			const balances = await this.balanceFetcher.fetchBalances({
 				chainId: input.chainId,
 				address,
@@ -66,7 +65,7 @@ export class UpdateBalanceHistoryCommandHandler extends BaseUseCase<
 				});
 
 				await this.balanceRepository.upsert({
-					userId: user.id,
+					address,
 					assetId: asset.id,
 					chainId: b.chainId,
 					balance: b.balance,
@@ -82,9 +81,8 @@ export class UpdateBalanceHistoryCommandHandler extends BaseUseCase<
 		this.logger.info("Balance refresh batch complete", {
 			processedAddresses,
 			upsertedBalances,
-			skippedUnknownUsers,
 		});
 
-		return { processedAddresses, upsertedBalances, skippedUnknownUsers };
+		return { processedAddresses, upsertedBalances };
 	}
 }

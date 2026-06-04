@@ -7,6 +7,7 @@ import schedule from "node-schedule";
 import environment from "./env/jobs-environment.js";
 import { container } from "./inversify.config.js";
 import { updateAssetsPricesJob } from "./modules/assets/index.js";
+import { syncLenderWebhookJob } from "./modules/webhooks/index.js";
 import { registerJobs } from "./scheduler/launcher.js";
 
 class App {
@@ -20,14 +21,19 @@ class App {
 		await getPrismaClient().$connect();
 		this.logger.info("Prisma connected");
 
-		registerJobs([updateAssetsPricesJob], this.logger);
+		const jobs = [updateAssetsPricesJob];
+		if (syncLenderWebhookJob) jobs.push(syncLenderWebhookJob);
+		registerJobs(jobs, this.logger);
 
 		printAppInfo({
 			name: "jobs",
 			env: environment.getCurrentEnvironment(),
 			details: {
 				priceRefreshCron: environment.priceRefreshCron,
-				registeredJobs: 1,
+				lenderWebhookSyncCron: syncLenderWebhookJob
+					? environment.lenderWebhookSyncCron
+					: "disabled",
+				registeredJobs: jobs.length,
 			},
 		});
 	}

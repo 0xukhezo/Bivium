@@ -4,6 +4,7 @@ import { OutboxAwareEventPublisher } from "../events/OutboxAwareEventPublisher.j
 import { RabbitMqEventPublisher } from "../messaging/RabbitMqEventPublisher.js";
 import { OutboxEventRepository } from "../repositories/OutboxEventRepository.js";
 import { AlchemyBalanceFetcher } from "../services/AlchemyBalanceFetcher.js";
+import { AlchemyWebhookAddressManager } from "../services/AlchemyWebhookAddressManager.js";
 import { PrismaTransactionManager } from "../services/PrismaTransactionManager.js";
 
 export const portsModule = new ContainerModule(
@@ -30,6 +31,9 @@ export const portsModule = new ContainerModule(
 			.inSingletonScope();
 		bind(APPLICATION_TYPES.AlchemyBalanceFetcher)
 			.to(AlchemyBalanceFetcher)
+			.inSingletonScope();
+		bind(APPLICATION_TYPES.AlchemyWebhookAddressManager)
+			.to(AlchemyWebhookAddressManager)
 			.inSingletonScope();
 	},
 );

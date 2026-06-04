@@ -81,13 +81,11 @@ export class MarketDepthRepository
 				JOIN ${lendersTable} il
 					ON il.address = lr.lender
 				   AND il.paused = false
-				LEFT JOIN public.users u
-					ON u.address = lr.lender
 				LEFT JOIN public.assets a
 					ON a.chain_id = ${input.chainId}
 				   AND a.address = t.loan
 				LEFT JOIN public.user_current_balances b
-					ON b.user_id  = u.id
+					ON b.address  = lr.lender
 				   AND b.asset_id = a.id
 				WHERE t.collateral = ${collateral}
 				  AND t.loan       = ${loan}

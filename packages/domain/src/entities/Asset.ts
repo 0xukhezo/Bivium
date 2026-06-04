@@ -1,10 +1,17 @@
 import type { AssetType } from "./AssetType.js";
 
+/** Canonical placeholder for a chain's native asset (e.g. ETH on Arbitrum One). */
+export const NATIVE_ASSET_ADDRESS =
+	"0x0000000000000000000000000000000000000000";
+
 export interface AssetProps {
 	id: string;
 	chainId: number;
-	/** Token contract address; `null` for the chain's native asset (e.g. ETH). */
-	address: string | null;
+	/**
+	 * Token address. ERC-20s use the contract address; the native asset uses
+	 * `NATIVE_ASSET_ADDRESS` (`0x0…0`). Always lowercased.
+	 */
+	address: string;
 	symbol: string;
 	decimals: number;
 	name: string | null;
@@ -17,7 +24,7 @@ export interface AssetProps {
 export class Asset implements AssetProps {
 	public id: string;
 	public chainId: number;
-	public address: string | null;
+	public address: string;
 	public symbol: string;
 	public decimals: number;
 	public name: string | null;
@@ -29,7 +36,7 @@ export class Asset implements AssetProps {
 	constructor(props: AssetProps) {
 		this.id = props.id;
 		this.chainId = props.chainId;
-		this.address = props.address?.toLowerCase() ?? null;
+		this.address = props.address.toLowerCase();
 		this.symbol = props.symbol;
 		this.decimals = props.decimals;
 		this.name = props.name;

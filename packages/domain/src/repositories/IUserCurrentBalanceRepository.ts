@@ -5,8 +5,8 @@ import type {
 
 export interface IUserCurrentBalanceRepository {
 	upsert(balance: UserCurrentBalanceProps): Promise<UserCurrentBalance>;
-	findByUserAndAsset(
-		userId: string,
+	findByAddressAndAsset(
+		address: string,
 		assetId: string,
 	): Promise<UserCurrentBalance | null>;
 }

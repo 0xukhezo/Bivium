@@ -2,8 +2,8 @@ import type { AssetType } from "@bivium/domain";
 
 export interface AssetBalance {
 	chainId: number;
-	/** Token contract address; `null` for the chain's native asset (e.g. ETH). */
-	address: string | null;
+	/** Token address; the native asset uses `0x0…0` (NATIVE_ASSET_ADDRESS). */
+	address: string;
 	symbol: string;
 	decimals: number;
 	type: AssetType;

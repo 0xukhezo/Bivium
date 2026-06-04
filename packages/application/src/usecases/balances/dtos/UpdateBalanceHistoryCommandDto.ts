@@ -6,5 +6,4 @@ export type UpdateBalanceHistoryCommandInputDto = {
 export type UpdateBalanceHistoryCommandOutputDto = {
 	processedAddresses: number;
 	upsertedBalances: number;
-	skippedUnknownUsers: number;
 };
