@@ -13,6 +13,9 @@ model Asset {
   balances UserCurrentBalance[]
   price    AssetPrice?
 
+  // (The `balances` back-relation is intentionally Asset-only — see balances.prisma.
+  //  Wallet identity lives in the `address` column, no separate User model.)
+
   @@unique([chainId, address])
   @@map("assets")
 }

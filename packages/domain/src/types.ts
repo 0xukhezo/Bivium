@@ -1,6 +1,5 @@
 export const DOMAIN_REPOSITORY_TYPES = {
 	OnchainEventRepository: Symbol.for("OnchainEventRepository"),
-	UserRepository: Symbol.for("UserRepository"),
 	AssetRepository: Symbol.for("AssetRepository"),
 	AssetPriceRepository: Symbol.for("AssetPriceRepository"),
 	UserCurrentBalanceRepository: Symbol.for("UserCurrentBalanceRepository"),

@@ -2,8 +2,8 @@ import type { IMarketSummaryRepository, MarketSummary } from "@bivium/domain";
 import { injectable } from "inversify";
 import { Prisma } from "../../generated/client/index.js";
 import {
-	mapRawRowToMarketSummary,
 	type RawMarketSummaryRow,
+	mapRawRowToMarketSummary,
 } from "../mappers/MarketSummaryMapper.js";
 import { BaseRepository } from "./BaseRepository.js";
 
@@ -81,13 +81,11 @@ export class MarketSummaryRepository
 					JOIN ${lendersTable} il
 						ON il.address = lr.lender
 					   AND il.paused = false
-					LEFT JOIN public.users u
-						ON u.address = lr.lender
 					LEFT JOIN public.assets a
 						ON a.chain_id = ${chainId}
 					   AND a.address = t.loan
 					LEFT JOIN public.user_current_balances b
-						ON b.user_id = u.id
+						ON b.address  = lr.lender
 					   AND b.asset_id = a.id
 					WHERE t.active = true
 				),
