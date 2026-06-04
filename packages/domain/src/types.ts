@@ -5,6 +5,7 @@ export const DOMAIN_REPOSITORY_TYPES = {
 	AssetPriceRepository: Symbol.for("AssetPriceRepository"),
 	UserCurrentBalanceRepository: Symbol.for("UserCurrentBalanceRepository"),
 	MarketSummaryRepository: Symbol.for("MarketSummaryRepository"),
+	LenderMarketSummaryRepository: Symbol.for("LenderMarketSummaryRepository"),
 } as const;
 
 export const DOMAIN_SERVICE_TYPES = {

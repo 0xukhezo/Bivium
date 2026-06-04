@@ -3,4 +3,5 @@ export * from "./IUserRepository.js";
 export * from "./IAssetRepository.js";
 export * from "./IAssetPriceRepository.js";
 export * from "./IMarketSummaryRepository.js";
+export * from "./ILenderMarketSummaryRepository.js";
 export * from "./IUserCurrentBalanceRepository.js";

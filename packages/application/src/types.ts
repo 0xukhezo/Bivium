@@ -12,9 +12,8 @@ export const APPLICATION_TYPES = {
 	UpdateAssetPricesCommandHandler: Symbol.for(
 		"UpdateAssetPricesCommandHandler",
 	),
-	GetMarketSummariesQueryHandler: Symbol.for(
-		"GetMarketSummariesQueryHandler",
-	),
+	GetMarketSummariesQueryHandler: Symbol.for("GetMarketSummariesQueryHandler"),
+	GetLenderMarketsQueryHandler: Symbol.for("GetLenderMarketsQueryHandler"),
 	OutboxPollerService: Symbol.for("OutboxPollerService"),
 
 	// Ports

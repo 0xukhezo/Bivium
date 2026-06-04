@@ -5,4 +5,5 @@ export * from "./User.js";
 export * from "./Asset.js";
 export * from "./AssetPrice.js";
 export * from "./MarketSummary.js";
+export * from "./LenderMarketSummary.js";
 export * from "./UserCurrentBalance.js";
