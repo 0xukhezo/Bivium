@@ -2,6 +2,7 @@ import { DOMAIN_TYPES } from "@bivium/domain";
 import { ContainerModule, type ContainerModuleLoadOptions } from "inversify";
 import { AssetPriceRepository } from "../repositories/AssetPriceRepository.js";
 import { AssetRepository } from "../repositories/AssetRepository.js";
+import { BorrowerLoanRepository } from "../repositories/BorrowerLoanRepository.js";
 import { LenderMarketSummaryRepository } from "../repositories/LenderMarketSummaryRepository.js";
 import { MarketSummaryRepository } from "../repositories/MarketSummaryRepository.js";
 import { OnchainEventRepository } from "../repositories/OnchainEventRepository.js";
@@ -23,6 +24,9 @@ export const repositoryModule = new ContainerModule(
 			.inSingletonScope();
 		bind(DOMAIN_TYPES.LenderMarketSummaryRepository)
 			.to(LenderMarketSummaryRepository)
+			.inSingletonScope();
+		bind(DOMAIN_TYPES.BorrowerLoanRepository)
+			.to(BorrowerLoanRepository)
 			.inSingletonScope();
 		bind(DOMAIN_TYPES.UserCurrentBalanceRepository)
 			.to(UserCurrentBalanceRepository)

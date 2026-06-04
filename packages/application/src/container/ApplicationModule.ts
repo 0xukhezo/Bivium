@@ -2,6 +2,7 @@ import { ContainerModule, type ContainerModuleLoadOptions } from "inversify";
 import { APPLICATION_TYPES } from "../types.js";
 import { UpdateAssetPricesCommandHandler } from "../usecases/assets/commands/UpdateAssetPricesCommandHandler.js";
 import { UpdateBalanceHistoryCommandHandler } from "../usecases/balances/commands/UpdateBalanceHistoryCommandHandler.js";
+import { GetBorrowerLoansQueryHandler } from "../usecases/borrowers/queries/GetBorrowerLoansQueryHandler.js";
 import { GetLenderMarketsQueryHandler } from "../usecases/markets/queries/GetLenderMarketsQueryHandler.js";
 import { GetMarketSummariesQueryHandler } from "../usecases/markets/queries/GetMarketSummariesQueryHandler.js";
 import { OutboxPollerService } from "../usecases/outbox/services/OutboxPollerService.js";
@@ -32,6 +33,10 @@ export const applicationModule = new ContainerModule(
 
 		bind(APPLICATION_TYPES.GetLenderMarketsQueryHandler)
 			.to(GetLenderMarketsQueryHandler)
+			.inSingletonScope();
+
+		bind(APPLICATION_TYPES.GetBorrowerLoansQueryHandler)
+			.to(GetBorrowerLoansQueryHandler)
 			.inSingletonScope();
 
 		bind(APPLICATION_TYPES.OutboxPollerService)
