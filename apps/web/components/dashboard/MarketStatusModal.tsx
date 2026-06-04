@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import type { LenderMarket } from "@/lib/lender";
@@ -9,7 +8,10 @@ interface MarketStatusModalProps {
   market: LenderMarket | null;
   open: boolean;
   onClose: () => void;
-  onConfirm: (id: string) => Promise<void>;
+  onConfirm: () => void;
+  /** Parent-owned submitting state — true while the writeContract is pending
+   *  or the receipt is being confirmed. The modal stays open through both. */
+  submitting: boolean;
 }
 
 export function MarketStatusModal({
@@ -17,29 +19,18 @@ export function MarketStatusModal({
   open,
   onClose,
   onConfirm,
+  submitting,
 }: MarketStatusModalProps) {
-  const [submitting, setSubmitting] = useState(false);
-
   if (!market) return null;
 
   const pausing = market.status === "active";
   const title = pausing ? "Pause market" : "Resume market";
   const description = pausing
-    ? "Pausing stops new borrows from this market — borrowers will no longer be able to draw loans against it. Existing positions stay open and keep accruing interest. You can resume at any time."
-    : "Resuming reopens this market — borrowers will be able to take new loans against your liquidity again.";
-
-  const handleConfirm = async () => {
-    setSubmitting(true);
-    try {
-      await onConfirm(market.id);
-      onClose();
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    ? "Pausing sets your rate for this loan token to 0 — borrowers can no longer draw new loans against it. Existing positions stay open and keep accruing interest. You can resume at any time."
+    : "Resuming restores your rate for this loan token, reopening the market to new borrows against your liquidity.";
 
   return (
-    <Modal open={open} onClose={onClose} title={title}>
+    <Modal open={open} onClose={submitting ? () => {} : onClose} title={title}>
       <div className="flex items-center gap-2 font-medium text-text-primary">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -64,9 +55,7 @@ export function MarketStatusModal({
         <span>{market.loanToken.symbol}</span>
       </div>
       <p className="mt-3 text-sm text-text-secondary">{description}</p>
-      <p className="mt-4 text-xs text-text-muted">
-        This action requires a blockchain transaction.
-      </p>
+
       <div className="mt-6 flex gap-3">
         <Button
           variant="secondary"
@@ -81,7 +70,7 @@ export function MarketStatusModal({
           variant="primary"
           size="md"
           className="flex-1"
-          onClick={handleConfirm}
+          onClick={onConfirm}
           disabled={submitting}
         >
           {submitting

@@ -8,14 +8,17 @@ import {
   SortableHeader,
   type SortState,
 } from "@/components/ui/SortableHeader";
-import { RepayModal } from "./RepayModal";
 import { healthBand, type BorrowerLoan } from "@/lib/borrower";
 import type { Token } from "@/lib/tokens";
 import { formatCompact, formatPercent, formatUsd } from "@/lib/utils";
 
 interface MyLoansCardProps {
   loans: BorrowerLoan[];
-  onRepay: (id: string, amount: number) => Promise<void>;
+  /** Fire when the user clicks a row's Repay button. Parent owns the modal +
+   *  the tx lifecycle. */
+  onSelectRepay: (loan: BorrowerLoan) => void;
+  /** When true the row Repay buttons are disabled — a repay tx is in flight. */
+  submitting: boolean;
 }
 
 type SortKey = "collateral" | "debt" | "rate" | "health";
@@ -37,9 +40,12 @@ function compare(key: SortKey, a: BorrowerLoan, b: BorrowerLoan): number {
   }
 }
 
-export function MyLoansCard({ loans, onRepay }: MyLoansCardProps) {
+export function MyLoansCard({
+  loans,
+  onSelectRepay,
+  submitting,
+}: MyLoansCardProps) {
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
-  const [repayLoan, setRepayLoan] = useState<BorrowerLoan | null>(null);
 
   const handleSort = (key: SortKey) => setSort((prev) => nextSort(prev, key));
 
@@ -133,8 +139,9 @@ export function MyLoansCard({ loans, onRepay }: MyLoansCardProps) {
                       <td className="w-32 px-4 py-4 text-right">
                         <button
                           type="button"
-                          onClick={() => setRepayLoan(loan)}
-                          className="inline-flex h-9 w-28 items-center justify-center gap-1.5 rounded-md border border-border bg-bg px-3 text-sm font-medium text-text-secondary transition-colors duration-base ease-out-expo hover:border-accent hover:text-text-primary"
+                          onClick={() => onSelectRepay(loan)}
+                          disabled={submitting}
+                          className="inline-flex h-9 w-28 items-center justify-center gap-1.5 rounded-md border border-border bg-bg px-3 text-sm font-medium text-text-secondary transition-colors duration-base ease-out-expo hover:border-accent hover:text-text-primary disabled:pointer-events-none disabled:opacity-50"
                         >
                           Repay
                         </button>
@@ -148,12 +155,6 @@ export function MyLoansCard({ loans, onRepay }: MyLoansCardProps) {
         </div>
       )}
 
-      <RepayModal
-        loan={repayLoan}
-        open={repayLoan !== null}
-        onClose={() => setRepayLoan(null)}
-        onConfirm={onRepay}
-      />
     </Card>
   );
 }

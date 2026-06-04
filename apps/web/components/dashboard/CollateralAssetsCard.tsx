@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -8,8 +8,10 @@ import {
   AVAILABLE_COLLATERAL_ASSETS,
   MOCK_LENDER_PREFERENCES,
 } from "@/lib/lender";
+import { useSetAllowedCollaterals } from "@/hooks/useLenderProfileWrite";
 import type { Token } from "@/lib/tokens";
 import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 
 function sameAddress(a: string, b: string) {
   return a.toLowerCase() === b.toLowerCase();
@@ -20,14 +22,21 @@ function hasDiff(a: Token[], b: Token[]): boolean {
   return !a.every((aa) => b.some((bb) => sameAddress(aa.address, bb.address)));
 }
 
+/**
+ * Saves the accepted-collateral list with a single bulk
+ * BiviumProfile.setAllowedCollaterals(addresses[]) call — one wallet prompt,
+ * one tx, the whole list replaced atomically. */
 export function CollateralAssetsCard() {
   const [persisted, setPersisted] = useState<Token[]>(
     MOCK_LENDER_PREFERENCES.collateralAssets,
   );
   const [draft, setDraft] = useState<Token[]>(persisted);
-  const [submitting, setSubmitting] = useState(false);
+
+  const writeHook = useSetAllowedCollaterals();
+  const submitting = writeHook.isPending || writeHook.isConfirming;
 
   const toggle = (token: Token) => {
+    if (submitting) return;
     setDraft((prev) => {
       if (prev.some((t) => sameAddress(t.address, token.address))) {
         return prev.filter((t) => !sameAddress(t.address, token.address));
@@ -38,13 +47,34 @@ export function CollateralAssetsCard() {
 
   const dirty = hasDiff(draft, persisted);
 
-  const save = async () => {
-    setSubmitting(true);
-    // Mock blockchain tx — replace with wagmi writeContract once wired.
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-    setPersisted(draft);
-    setSubmitting(false);
+  const save = () => {
+    if (!dirty || submitting) return;
+    writeHook.setAllowedCollaterals(draft.map((t) => t.address));
   };
+
+  // Commit draft → persisted once the bulk tx confirms.
+  useEffect(() => {
+    if (!writeHook.isSuccess) return;
+    setPersisted(draft);
+    writeHook.reset();
+    toast.success("Accepted collateral updated", {
+      description:
+        draft.length === 0
+          ? "Collateral list is empty — no new borrows possible until you re-enable one."
+          : `${draft.length} ${draft.length === 1 ? "token" : "tokens"} accepted as collateral.`,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [writeHook.isSuccess]);
+
+  // Surface errors as toasts (wallet rejection, revert).
+  useEffect(() => {
+    if (!writeHook.error) return;
+    toast.error("Save failed", {
+      description: readableWriteError(writeHook.error),
+    });
+    writeHook.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [writeHook.error]);
 
   return (
     <Card>
@@ -68,8 +98,9 @@ export function CollateralAssetsCard() {
                 role="checkbox"
                 aria-checked={selected}
                 onClick={() => toggle(token)}
+                disabled={submitting}
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-md border bg-bg p-3 text-left transition-colors duration-base ease-out-expo",
+                  "flex w-full items-center gap-3 rounded-md border bg-bg p-3 text-left transition-colors duration-base ease-out-expo disabled:opacity-60",
                   selected
                     ? "border-accent"
                     : "border-border hover:border-accent",
@@ -109,9 +140,11 @@ export function CollateralAssetsCard() {
       </ul>
       <div className="mt-4 flex items-center justify-between gap-3">
         <p className="text-xs text-text-muted">
-          {dirty
-            ? "Saving requires a blockchain transaction."
-            : "No unsaved changes."}
+          {submitting
+            ? "Confirm the wallet prompt to continue."
+            : dirty
+              ? "Saving requires 1 transaction."
+              : "No unsaved changes."}
         </p>
         <Button
           variant="primary"
@@ -124,4 +157,9 @@ export function CollateralAssetsCard() {
       </div>
     </Card>
   );
+}
+
+function readableWriteError(err: Error): string {
+  const anyErr = err as Error & { shortMessage?: string };
+  return anyErr.shortMessage ?? err.message;
 }
