@@ -1,7 +1,8 @@
 model Asset {
   id        String    @id @default(uuid())
   chainId   Int       @map("chain_id")
-  address   String?   @map("address")
+  /// Token address. ERC-20s use the contract; native asset uses 0x0…0.
+  address   String    @map("address")
   symbol    String
   decimals  Int
   name      String?

@@ -5,7 +5,7 @@ import type {
 } from "@bivium/application";
 import { COMMON_TYPES } from "@bivium/common";
 import type { ILogger } from "@bivium/common/logger";
-import { AssetType } from "@bivium/domain";
+import { AssetType, NATIVE_ASSET_ADDRESS } from "@bivium/domain";
 import { inject, injectable } from "inversify";
 import type { AlchemyClient } from "../clients/AlchemyClient.js";
 import { INFRASTRUCTURE_TYPES } from "../types.js";
@@ -38,7 +38,7 @@ export class AlchemyBalanceFetcher implements IAlchemyBalanceFetcherPort {
 		);
 		out.push({
 			chainId: input.chainId,
-			address: null,
+			address: NATIVE_ASSET_ADDRESS,
 			symbol: "ETH",
 			decimals: 18,
 			type: AssetType.NATIVE,

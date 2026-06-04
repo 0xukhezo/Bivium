@@ -54,12 +54,6 @@ export class UpdateBalanceHistoryCommandHandler extends BaseUseCase<
 			});
 
 			for (const b of balances) {
-				// Skip native chain assets (`address === null`). Bivium's orderbook
-				// reads only loan-token balances, which are always ERC-20s; tracking
-				// native ETH adds rows no consumer queries and trips Prisma's
-				// `findUnique` on `(chainId, address)` because nullable parts of a
-				// compound unique can't be used as a unique lookup key.
-				if (b.address === null) continue;
 				const asset = await this.assetRepository.findOrCreate({
 					chainId: b.chainId,
 					address: b.address,
