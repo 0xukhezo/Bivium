@@ -12,7 +12,11 @@ interface RepayModalProps {
   loan: BorrowerLoan | null;
   open: boolean;
   onClose: () => void;
-  onConfirm: (loanId: string, amount: number) => Promise<void>;
+  /** Fire-and-forget — parent owns the tx state and decides when to close. */
+  onConfirm: (amount: number) => void;
+  /** Parent-owned submitting state. While true the modal is non-dismissable
+   *  and the confirm button shows "Confirming…". */
+  submitting: boolean;
 }
 
 function hfColor(hf: number): string {
@@ -24,9 +28,14 @@ function formatHf(hf: number): string {
   return Number.isFinite(hf) ? hf.toFixed(2) : "∞";
 }
 
-export function RepayModal({ loan, open, onClose, onConfirm }: RepayModalProps) {
+export function RepayModal({
+  loan,
+  open,
+  onClose,
+  onConfirm,
+  submitting,
+}: RepayModalProps) {
   const [amountInput, setAmountInput] = useState("");
-  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (open) setAmountInput("");
@@ -81,21 +90,16 @@ export function RepayModal({ loan, open, onClose, onConfirm }: RepayModalProps) 
   // Full debt — may exceed balance, which the button state then flags.
   const handleMaxDebt = () => setAmount(debtAmount);
 
-  const handleConfirm = async () => {
-    if (!valid) return;
-    setSubmitting(true);
-    try {
-      await onConfirm(loan.id, amount);
-      onClose();
-    } finally {
-      setSubmitting(false);
-    }
+  const handleConfirm = () => {
+    if (!valid || submitting) return;
+    onConfirm(amount);
+    // Parent closes the modal once the tx confirms / errors.
   };
 
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={submitting ? () => {} : onClose}
       title={`Repay ${loan.loanToken.symbol}`}
     >
       <div className="mb-2 flex items-baseline justify-between gap-2">

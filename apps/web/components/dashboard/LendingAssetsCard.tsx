@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -9,8 +9,10 @@ import {
   MOCK_LENDER_PREFERENCES,
   type LendingAsset,
 } from "@/lib/lender";
+import { useSetRate } from "@/hooks/useLenderProfileWrite";
 import type { Token } from "@/lib/tokens";
 import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 
 function sameAddress(a: string, b: string) {
   return a.toLowerCase() === b.toLowerCase();
@@ -38,6 +40,37 @@ function buildInitialRateInputs(
   return map;
 }
 
+/**
+ * One sequenced setRate call per dirty asset. The Profile contract has no
+ * multicall, so each token gets its own wallet prompt. Operations are:
+ *   - added / rate-changed → setRate(token, annualRate)
+ *   - removed              → setRate(token, 0)
+ */
+interface PendingOp {
+  token: Token;
+  /** Annual rate as a 0–1 fraction. 0 = remove. */
+  annualRate: number;
+}
+
+function computeOps(
+  persisted: LendingAsset[],
+  draft: LendingAsset[],
+): PendingOp[] {
+  const ops: PendingOp[] = [];
+  for (const d of draft) {
+    const p = findAsset(persisted, d.token.address);
+    if (!p || p.ratePerSecond !== d.ratePerSecond) {
+      ops.push({ token: d.token, annualRate: d.ratePerSecond });
+    }
+  }
+  for (const p of persisted) {
+    if (!findAsset(draft, p.token.address)) {
+      ops.push({ token: p.token, annualRate: 0 });
+    }
+  }
+  return ops;
+}
+
 export function LendingAssetsCard() {
   const [persisted, setPersisted] = useState<LendingAsset[]>(
     MOCK_LENDER_PREFERENCES.lendingAssets,
@@ -48,9 +81,19 @@ export function LendingAssetsCard() {
   const [rateInputs, setRateInputs] = useState<Record<string, string>>(() =>
     buildInitialRateInputs(persisted),
   );
-  const [submitting, setSubmitting] = useState(false);
+
+  const setRateHook = useSetRate();
+
+  // Sequenced submission state.
+  const [opsQueue, setOpsQueue] = useState<PendingOp[]>([]);
+  const [opIndex, setOpIndex] = useState<number>(-1);
+  const totalOpsRef = useRef<number>(0);
+  const successfulOpsRef = useRef<LendingAsset[]>([]);
+
+  const submitting = opIndex >= 0;
 
   const toggle = (token: Token) => {
+    if (submitting) return;
     const key = token.address.toLowerCase();
     if (findAsset(draft, token.address)) {
       setDraft((prev) =>
@@ -68,6 +111,7 @@ export function LendingAssetsCard() {
   };
 
   const updateRate = (address: string, raw: string) => {
+    if (submitting) return;
     const key = address.toLowerCase();
     setRateInputs((prev) => ({ ...prev, [key]: raw }));
     const v = parseFloat(raw);
@@ -83,14 +127,97 @@ export function LendingAssetsCard() {
 
   const dirty = hasDiff(draft, persisted);
 
-  const save = async () => {
-    setSubmitting(true);
-    // Mock blockchain tx — replace with wagmi writeContract once wired.
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-    setPersisted(draft);
-    setRateInputs(buildInitialRateInputs(draft));
-    setSubmitting(false);
+  // Pre-computed op list — also used to render "Saving 1/3…" labels.
+  const previewOps = useMemo(
+    () => computeOps(persisted, draft),
+    [persisted, draft],
+  );
+
+  const startSave = () => {
+    const ops = computeOps(persisted, draft);
+    if (ops.length === 0) return;
+    opsQueue.length; // hold reference (TS noise — silenced by referencing useState val)
+    setOpsQueue(ops);
+    totalOpsRef.current = ops.length;
+    successfulOpsRef.current = [];
+    setOpIndex(0);
   };
+
+  // Fire the next setRate when we advance opIndex (and on initial 0).
+  useEffect(() => {
+    if (opIndex < 0) return;
+    const op = opsQueue[opIndex];
+    if (!op) return;
+    if (setRateHook.isPending || setRateHook.isConfirming) return;
+    if (setRateHook.hash || setRateHook.error) return;
+    setRateHook.setRate(op.token.address, op.annualRate);
+    // setRate is fire-and-forget; receipt drives the next step.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opIndex, opsQueue]);
+
+  // Advance on receipt.
+  useEffect(() => {
+    if (opIndex < 0 || !setRateHook.isSuccess) return;
+    const op = opsQueue[opIndex];
+    if (op && op.annualRate > 0) {
+      successfulOpsRef.current = [
+        ...successfulOpsRef.current.filter(
+          (a) => !sameAddress(a.token.address, op.token.address),
+        ),
+        { token: op.token, ratePerSecond: op.annualRate },
+      ];
+    } else if (op && op.annualRate === 0) {
+      successfulOpsRef.current = successfulOpsRef.current.filter(
+        (a) => !sameAddress(a.token.address, op.token.address),
+      );
+    }
+
+    setRateHook.reset();
+    const nextIndex = opIndex + 1;
+    if (nextIndex >= opsQueue.length) {
+      // Done — commit the draft as persisted, surface a summary toast.
+      setPersisted(draft);
+      setRateInputs(buildInitialRateInputs(draft));
+      setOpIndex(-1);
+      setOpsQueue([]);
+      const count = totalOpsRef.current;
+      totalOpsRef.current = 0;
+      toast.success("Lending preferences saved", {
+        description:
+          count === 1
+            ? "1 rate update confirmed on-chain."
+            : `${count} rate updates confirmed on-chain.`,
+      });
+    } else {
+      setOpIndex(nextIndex);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setRateHook.isSuccess, opIndex]);
+
+  // Halt the sequence on error (user rejected, revert, etc.). Anything we
+  // did already confirm stays persisted on-chain, so we merge it locally so
+  // the UI reflects reality and the user can pick up where they left off.
+  useEffect(() => {
+    if (!setRateHook.error || opIndex < 0) return;
+    const partial = mergeOps(persisted, successfulOpsRef.current);
+    setPersisted(partial);
+    setRateInputs(buildInitialRateInputs(partial));
+    setOpIndex(-1);
+    setOpsQueue([]);
+    totalOpsRef.current = 0;
+    toast.error("Save halted", {
+      description: readableWriteError(setRateHook.error),
+    });
+    setRateHook.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setRateHook.error]);
+
+  const buttonLabel = (() => {
+    if (!submitting) return "Save preferences";
+    const total = totalOpsRef.current || opsQueue.length;
+    const step = opIndex + 1;
+    return `Saving ${step}/${total}…`;
+  })();
 
   return (
     <Card>
@@ -121,8 +248,9 @@ export function LendingAssetsCard() {
                     aria-checked={Boolean(selected)}
                     aria-label={`Toggle ${token.symbol}`}
                     onClick={() => toggle(token)}
+                    disabled={submitting}
                     className={cn(
-                      "grid h-5 w-5 shrink-0 place-items-center rounded border transition-colors duration-base ease-out-expo",
+                      "grid h-5 w-5 shrink-0 place-items-center rounded border transition-colors duration-base ease-out-expo disabled:opacity-50",
                       selected
                         ? "border-accent bg-accent text-arb-white"
                         : "border-border bg-bg-elevated hover:border-accent",
@@ -164,7 +292,8 @@ export function LendingAssetsCard() {
                             updateRate(token.address, raw);
                           }
                         }}
-                        className="h-10 w-20 rounded-md border border-border bg-bg-elevated px-2 text-right text-sm tabular-nums text-text-primary focus:border-accent focus:outline-none"
+                        disabled={submitting}
+                        className="h-10 w-20 rounded-md border border-border bg-bg-elevated px-2 text-right text-sm tabular-nums text-text-primary focus:border-accent focus:outline-none disabled:opacity-50"
                       />
                       <span className="text-sm text-text-muted">%</span>
                     </label>
@@ -177,19 +306,39 @@ export function LendingAssetsCard() {
       </ul>
       <div className="mt-4 flex items-center justify-between gap-3">
         <p className="text-xs text-text-muted">
-          {dirty
-            ? "Saving requires a blockchain transaction."
-            : "No unsaved changes."}
+          {submitting
+            ? "Confirm each wallet prompt to continue."
+            : dirty
+              ? previewOps.length === 1
+                ? "Saving requires 1 transaction."
+                : `Saving requires ${previewOps.length} transactions.`
+              : "No unsaved changes."}
         </p>
         <Button
           variant="primary"
           size="md"
-          onClick={save}
+          onClick={startSave}
           disabled={!dirty || submitting}
         >
-          {submitting ? "Confirming…" : "Save preferences"}
+          {buttonLabel}
         </Button>
       </div>
     </Card>
   );
+}
+
+function mergeOps(
+  base: LendingAsset[],
+  ops: LendingAsset[],
+): LendingAsset[] {
+  const next = base.filter(
+    (b) => !ops.some((o) => sameAddress(o.token.address, b.token.address)),
+  );
+  for (const op of ops) next.push(op);
+  return next;
+}
+
+function readableWriteError(err: Error): string {
+  const anyErr = err as Error & { shortMessage?: string };
+  return anyErr.shortMessage ?? err.message;
 }

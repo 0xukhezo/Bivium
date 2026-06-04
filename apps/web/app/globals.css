@@ -279,6 +279,19 @@
   background-size: 100% 100%, 56px 56px, 56px 56px;
 }
 
+/* ── Toast notifications ─────────────────────────────────────────────── */
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-8px) translateX(12px); }
+  to   { opacity: 1; transform: translateY(0)    translateX(0);    }
+}
+@keyframes toast-out {
+  from { opacity: 1; transform: translateX(0);    }
+  to   { opacity: 0; transform: translateX(16px); }
+}
+.toast-enter { animation: toast-in 220ms cubic-bezier(.22, 1, .36, 1) both; }
+.toast-exit  { animation: toast-out 200ms cubic-bezier(.7, 0, .84, 0) both; }
+
 /* Hairline rule + dot motif used by SectionEyebrow. */
 @keyframes eyebrow-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(20,242,252,.55); }
