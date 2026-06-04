@@ -4,6 +4,7 @@ import { UpdateAssetPricesCommandHandler } from "../usecases/assets/commands/Upd
 import { UpdateBalanceHistoryCommandHandler } from "../usecases/balances/commands/UpdateBalanceHistoryCommandHandler.js";
 import { GetBorrowerLoansQueryHandler } from "../usecases/borrowers/queries/GetBorrowerLoansQueryHandler.js";
 import { GetLenderMarketsQueryHandler } from "../usecases/markets/queries/GetLenderMarketsQueryHandler.js";
+import { GetMarketDepthQueryHandler } from "../usecases/markets/queries/GetMarketDepthQueryHandler.js";
 import { GetMarketSummariesQueryHandler } from "../usecases/markets/queries/GetMarketSummariesQueryHandler.js";
 import { OutboxPollerService } from "../usecases/outbox/services/OutboxPollerService.js";
 import { SaveOnchainEventsCommandHandler } from "../usecases/webhooks/commands/SaveOnchainEventsCommandHandler.js";
@@ -37,6 +38,10 @@ export const applicationModule = new ContainerModule(
 
 		bind(APPLICATION_TYPES.GetBorrowerLoansQueryHandler)
 			.to(GetBorrowerLoansQueryHandler)
+			.inSingletonScope();
+
+		bind(APPLICATION_TYPES.GetMarketDepthQueryHandler)
+			.to(GetMarketDepthQueryHandler)
 			.inSingletonScope();
 
 		bind(APPLICATION_TYPES.OutboxPollerService)

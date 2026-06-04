@@ -9,5 +9,6 @@ const controller = container.get<MarketsController>(
 );
 
 router.get("/", controller.listMarkets);
+router.get("/:collateral/:loan/depth", controller.getMarketDepth);
 
 export default router;

@@ -4,6 +4,7 @@ import { AssetPriceRepository } from "../repositories/AssetPriceRepository.js";
 import { AssetRepository } from "../repositories/AssetRepository.js";
 import { BorrowerLoanRepository } from "../repositories/BorrowerLoanRepository.js";
 import { LenderMarketSummaryRepository } from "../repositories/LenderMarketSummaryRepository.js";
+import { MarketDepthRepository } from "../repositories/MarketDepthRepository.js";
 import { MarketSummaryRepository } from "../repositories/MarketSummaryRepository.js";
 import { OnchainEventRepository } from "../repositories/OnchainEventRepository.js";
 import { UserCurrentBalanceRepository } from "../repositories/UserCurrentBalanceRepository.js";
@@ -27,6 +28,9 @@ export const repositoryModule = new ContainerModule(
 			.inSingletonScope();
 		bind(DOMAIN_TYPES.BorrowerLoanRepository)
 			.to(BorrowerLoanRepository)
+			.inSingletonScope();
+		bind(DOMAIN_TYPES.MarketDepthRepository)
+			.to(MarketDepthRepository)
 			.inSingletonScope();
 		bind(DOMAIN_TYPES.UserCurrentBalanceRepository)
 			.to(UserCurrentBalanceRepository)
