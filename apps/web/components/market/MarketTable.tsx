@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Search, AlertCircle } from "lucide-react";
+import { useQueries } from "@tanstack/react-query";
 import { Input } from "@/components/ui/Input";
 import {
   nextSort,
@@ -13,6 +14,7 @@ import { TokenFilterDropdown } from "@/components/market/TokenFilterDropdown";
 import { SUPPORTED_TOKENS, type Token } from "@/lib/tokens";
 import { getMarketSlug, type Market } from "@/lib/markets";
 import { useMarkets } from "@/hooks/useMarkets";
+import { fetchMarketDepth } from "@/lib/api/market-depth";
 import { formatCompact, formatPercent, formatUsd } from "@/lib/utils";
 
 const PAGE_SIZE = 9;
@@ -23,9 +25,15 @@ type SortKey =
   | "lltv"
   | "liquidity"
   | "borrowed"
-  | "rate";
+  | "rate"
+  | "avgRate";
 
-function compareMarkets(key: SortKey, a: Market, b: Market): number {
+function compareMarkets(
+  key: SortKey,
+  a: Market,
+  b: Market,
+  avgMap: ReadonlyMap<string, number | null>,
+): number {
   switch (key) {
     case "collateral":
       return a.collateralToken.symbol.localeCompare(b.collateralToken.symbol);
@@ -39,6 +47,13 @@ function compareMarkets(key: SortKey, a: Market, b: Market): number {
       return a.totalBorrowAssets.usd - b.totalBorrowAssets.usd;
     case "rate":
       return a.ratePerSecond - b.ratePerSecond;
+    case "avgRate":
+      // Rows whose avg isn't loaded yet (or has no lenders) sort to the
+      // end ascending — same convention `MyLoansCard` uses for null HF.
+      return (
+        (avgMap.get(a.id) ?? Number.POSITIVE_INFINITY) -
+        (avgMap.get(b.id) ?? Number.POSITIVE_INFINITY)
+      );
   }
 }
 
@@ -53,6 +68,47 @@ export function MarketTable() {
 
   const marketsQuery = useMarkets();
   const markets = useMemo(() => marketsQuery.data ?? [], [marketsQuery.data]);
+
+  // Fan out one depth query per market so we can show + sort by the
+  // size-weighted avg rate. React Query keys these the same way the
+  // detail-page hook does, so clicking through to /market/[pair] reuses
+  // the cached fetch instead of refiring it.
+  const depthQueries = useQueries({
+    queries: markets.map((m) => ({
+      queryKey: [
+        "market-depth",
+        m.collateralToken.address.toLowerCase(),
+        m.loanToken.address.toLowerCase(),
+      ] as const,
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        fetchMarketDepth(m.collateralToken.address, m.loanToken.address, {
+          signal,
+        }),
+      staleTime: 30_000,
+      refetchOnWindowFocus: true,
+    })),
+  });
+  const depthByMarketId = useMemo(() => {
+    const map = new Map<
+      string,
+      { avgRate: number | null; isPending: boolean }
+    >();
+    markets.forEach((m, i) => {
+      const q = depthQueries[i];
+      const steps = q?.data?.steps ?? [];
+      const last = steps.length > 0 ? steps[steps.length - 1] : null;
+      map.set(m.id, {
+        avgRate: last?.cumulativeAvgApy ?? null,
+        isPending: q?.isPending ?? true,
+      });
+    });
+    return map;
+  }, [markets, depthQueries]);
+  const avgRateById = useMemo(() => {
+    const map = new Map<string, number | null>();
+    depthByMarketId.forEach((v, id) => map.set(id, v.avgRate));
+    return map;
+  }, [depthByMarketId]);
 
   const toggleToken = (address: string) => {
     setSelectedAddresses((prev) => {
@@ -91,8 +147,10 @@ export function MarketTable() {
   const sorted = useMemo(() => {
     if (!sort) return filtered;
     const dir = sort.direction === "asc" ? 1 : -1;
-    return [...filtered].sort((a, b) => compareMarkets(sort.key, a, b) * dir);
-  }, [filtered, sort]);
+    return [...filtered].sort(
+      (a, b) => compareMarkets(sort.key, a, b, avgRateById) * dir,
+    );
+  }, [filtered, sort, avgRateById]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -158,7 +216,7 @@ export function MarketTable() {
       ) : (
         <div className="overflow-hidden rounded-md border border-border">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-[860px] text-sm">
               <thead className="border-b border-border bg-bg-sunken text-xs tracking-wider text-text-muted">
                 <tr>
                   <SortableHeader
@@ -192,8 +250,15 @@ export function MarketTable() {
                     onSort={handleSort}
                   />
                   <SortableHeader
-                    label="Rate"
+                    label="Best Rate"
                     sortKey="rate"
+                    sort={sort}
+                    onSort={handleSort}
+                    align="right"
+                  />
+                  <SortableHeader
+                    label="Avg Rate"
+                    sortKey="avgRate"
                     sort={sort}
                     onSort={handleSort}
                     align="right"
@@ -201,44 +266,23 @@ export function MarketTable() {
                 </tr>
               </thead>
               <tbody>
-                {pagedMarkets.map((market) => (
-                  <tr
-                    key={market.id}
-                    onClick={() => router.push(`/market/${getMarketSlug(market)}`)}
-                    className="group cursor-pointer border-b border-border transition-[background,box-shadow] duration-base ease-out-expo last:border-b-0 hover:bg-bg-elevated hover:shadow-[inset_3px_0_0_0_var(--color-arb-cyan)]"
-                  >
-                    <td className="px-4 py-4">
-                      <TokenCell token={market.collateralToken} />
-                    </td>
-                    <td className="px-4 py-4">
-                      <TokenCell token={market.loanToken} />
-                    </td>
-                    <td className="px-4 py-4 tabular-nums text-text-primary">
-                      {formatPercent(market.lltv)}
-                    </td>
-                    <td className="px-4 py-4">
-                      <p className="font-medium tabular-nums text-text-primary">
-                        {formatCompact(market.totalSupplyAssets.amount)}{" "}
-                        {market.loanToken.symbol}
-                      </p>
-                      <p className="text-xs tabular-nums text-text-muted">
-                        {formatUsd(market.totalSupplyAssets.usd)}
-                      </p>
-                    </td>
-                    <td className="px-4 py-4">
-                      <p className="font-medium tabular-nums text-text-primary">
-                        {formatCompact(market.totalBorrowAssets.amount)}{" "}
-                        {market.loanToken.symbol}
-                      </p>
-                      <p className="text-xs tabular-nums text-text-muted">
-                        {formatUsd(market.totalBorrowAssets.usd)}
-                      </p>
-                    </td>
-                    <td className="px-4 py-4 text-right font-medium tabular-nums text-text-primary">
-                      {formatPercent(market.ratePerSecond)}
-                    </td>
-                  </tr>
-                ))}
+                {pagedMarkets.map((market) => {
+                  const d = depthByMarketId.get(market.id) ?? {
+                    avgRate: null,
+                    isPending: true,
+                  };
+                  return (
+                    <MarketRow
+                      key={market.id}
+                      market={market}
+                      avgRate={d.avgRate}
+                      avgPending={d.isPending}
+                      onClick={() =>
+                        router.push(`/market/${getMarketSlug(market)}`)
+                      }
+                    />
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -276,6 +320,66 @@ export function MarketTable() {
   );
 }
 
+// One row in the markets table. Receives the weighted-avg rate as a prop
+// so the parent can use the same value for sorting; the depth fetches
+// themselves are batched once in the parent via `useQueries`.
+function MarketRow({
+  market,
+  avgRate,
+  avgPending,
+  onClick,
+}: {
+  market: Market;
+  avgRate: number | null;
+  avgPending: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <tr
+      onClick={onClick}
+      className="group cursor-pointer border-b border-border transition-[background,box-shadow] duration-base ease-out-expo last:border-b-0 hover:bg-bg-elevated hover:shadow-[inset_3px_0_0_0_var(--color-arb-cyan)]"
+    >
+      <td className="px-4 py-4">
+        <TokenCell token={market.collateralToken} />
+      </td>
+      <td className="px-4 py-4">
+        <TokenCell token={market.loanToken} />
+      </td>
+      <td className="px-4 py-4 tabular-nums text-text-primary">
+        {formatPercent(market.lltv)}
+      </td>
+      <td className="px-4 py-4">
+        <p className="font-medium tabular-nums text-text-primary">
+          {formatCompact(market.totalSupplyAssets.amount)}{" "}
+          {market.loanToken.symbol}
+        </p>
+        <p className="text-xs tabular-nums text-text-muted">
+          {formatUsd(market.totalSupplyAssets.usd)}
+        </p>
+      </td>
+      <td className="px-4 py-4">
+        <p className="font-medium tabular-nums text-text-primary">
+          {formatCompact(market.totalBorrowAssets.amount)}{" "}
+          {market.loanToken.symbol}
+        </p>
+        <p className="text-xs tabular-nums text-text-muted">
+          {formatUsd(market.totalBorrowAssets.usd)}
+        </p>
+      </td>
+      <td className="px-4 py-4 text-right font-medium tabular-nums text-text-primary">
+        {formatPercent(market.ratePerSecond)}
+      </td>
+      <td className="px-4 py-4 text-right font-medium tabular-nums text-text-secondary">
+        {avgPending
+          ? "…"
+          : avgRate !== null
+            ? formatPercent(avgRate)
+            : "—"}
+      </td>
+    </tr>
+  );
+}
+
 function TokenCell({ token }: { token: Token }) {
   return (
     <div className="flex items-center gap-2">
@@ -294,31 +398,37 @@ function TokenCell({ token }: { token: Token }) {
 }
 
 function SkeletonTable({ rows }: { rows: number }) {
+  const headers = [
+    "Collateral",
+    "Loan",
+    "LLTV",
+    "Total Liquidity",
+    "Total Borrowed",
+    "Best Rate",
+    "Avg Rate",
+  ];
   return (
     <div className="overflow-hidden rounded-md border border-border">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] text-sm">
+        <table className="w-full min-w-[860px] text-sm">
           <thead className="border-b border-border bg-bg-sunken text-xs tracking-wider text-text-muted">
             <tr>
-              {["Collateral", "Loan", "LLTV", "Total Liquidity", "Total Borrowed", "Rate"].map(
-                (h, i) => (
-                  <th
-                    key={h}
-                    scope="col"
-                    className={`px-4 py-3 font-medium ${i === 5 ? "text-right" : "text-left"}`}
-                  >
-                    {h}
-                  </th>
-                ),
-              )}
+              {headers.map((h, i) => (
+                <th
+                  key={h}
+                  scope="col"
+                  className={`px-4 py-3 font-medium ${
+                    i >= headers.length - 2 ? "text-right" : "text-left"
+                  }`}
+                >
+                  {h}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {Array.from({ length: rows }).map((_, i) => (
-              <tr
-                key={i}
-                className="border-b border-border last:border-b-0"
-              >
+              <tr key={i} className="border-b border-border last:border-b-0">
                 <td className="px-4 py-4">
                   <SkeletonBar widthClass="w-24" />
                 </td>
@@ -333,6 +443,9 @@ function SkeletonTable({ rows }: { rows: number }) {
                 </td>
                 <td className="px-4 py-4">
                   <SkeletonBar widthClass="w-28" />
+                </td>
+                <td className="px-4 py-4 text-right">
+                  <SkeletonBar widthClass="w-16 ml-auto" />
                 </td>
                 <td className="px-4 py-4 text-right">
                   <SkeletonBar widthClass="w-16 ml-auto" />

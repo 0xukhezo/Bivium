@@ -2,12 +2,21 @@
 
 import { ResponsiveSankey } from "@nivo/sankey";
 import { useAccount } from "wagmi";
-import type { Fill } from "@/lib/lender-offers";
 import type { Token } from "@/lib/tokens";
 import { formatCompact, formatPercent, truncateAddress } from "@/lib/utils";
 
+// One contribution to a borrow order — the slice of `amount` (loan-token
+// units) that a specific lender fills at their `ratePerSecond` (annual
+// fraction). Independent of any specific offer/orderbook type so the
+// component is reusable with whichever source produced the walk.
+export interface BorrowFill {
+  lender: string;
+  ratePerSecond: number;
+  amount: number;
+}
+
 interface BorrowFlowSankeyProps {
-  fills: Fill[];
+  fills: BorrowFill[];
   loanToken: Token;
 }
 
@@ -22,20 +31,20 @@ export function BorrowFlowSankey({ fills, loanToken }: BorrowFlowSankeyProps) {
   const data = {
     nodes: [
       ...fills.map((f) => ({
-        id: f.offer.lender,
-        nodeLabel: truncateAddress(f.offer.lender),
+        id: f.lender,
+        nodeLabel: truncateAddress(f.lender),
       })),
       { id: "you" as const, nodeLabel: youLabel },
     ],
     links: fills.map((f) => ({
-      source: f.offer.lender,
+      source: f.lender,
       target: "you" as const,
       value: f.amount,
     })),
   };
 
   const ratesByLender = new Map(
-    fills.map((f) => [f.offer.lender, f.offer.ratePerSecond]),
+    fills.map((f) => [f.lender, f.ratePerSecond]),
   );
 
   // Anchor badges to source-node centers; link midpoints all sit at y=50%
@@ -48,7 +57,7 @@ export function BorrowFlowSankey({ fills, loanToken }: BorrowFlowSankeyProps) {
     cumulative += f.amount;
     const sourceCenter = (start + end) / 2;
     const yPx = 8 + sourceCenter * 208;
-    return { rate: f.offer.ratePerSecond, yPx };
+    return { rate: f.ratePerSecond, yPx };
   });
 
   // nivo's runtime link shape isn't exported; typing strictly here would

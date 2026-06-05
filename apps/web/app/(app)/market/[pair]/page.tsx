@@ -5,9 +5,10 @@ import { notFound, useParams } from "next/navigation";
 import { useEffect, useMemo } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
-import { MockBadge } from "@/components/ui/MockBadge";
+import { DepthChart } from "@/components/market/DepthChart";
 import { LenderOrderbook } from "@/components/market/LenderOrderbook";
 import { MarketDetailActions } from "@/components/market/MarketDetailActions";
+import { useMarketDepth } from "@/hooks/useMarketDepth";
 import { useMarkets } from "@/hooks/useMarkets";
 import { getMarketSlug, type Market } from "@/lib/markets";
 import {
@@ -128,26 +129,19 @@ function MarketDetail({ market }: { market: Market }) {
       {/* Body — 2/3 chart + order book on the left, 1/3 stats panel on the right. */}
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
-          {/* TODO(remove-when-real): chart is hard-coded SVG; red border
-              flags it as mock until the historical-data endpoint lands. */}
-          <Card className="!border-danger">
+          <Card>
             <CardHeader>
-              <CardTitle>Utilization</CardTitle>
-              <MockBadge />
+              <CardTitle>Borrow depth</CardTitle>
               <span className="text-xs text-text-muted">
-                {formatPercent(utilization(market))} borrowed
+                Rate vs. cumulative borrow size
               </span>
             </CardHeader>
-            <ChartPlaceholder />
+            <DepthChartSection market={market} />
           </Card>
 
-          {/* TODO(remove-when-real): LenderOrderbook reads from
-              lib/lender-offers.ts (deterministic mocks). Red border flags it
-              as mock until the orderbook depth endpoint lands. */}
-          <Card className="!border-danger">
+          <Card>
             <CardHeader>
               <CardTitle>Order book</CardTitle>
-              <MockBadge />
               <span className="text-xs text-text-muted">
                 Lenders offering {loanToken.symbol} against{" "}
                 {collateralToken.symbol}
@@ -178,15 +172,51 @@ function utilization(market: Market): number {
 }
 
 function StatsPanel({ market }: { market: Market }) {
-  const { loanToken } = market;
+  const { loanToken, collateralToken } = market;
   const util = utilization(market);
+
+  // Reuses the same query as DepthChartSection — React Query dedupes the
+  // network call, so this is free. `bestRate` is the first lender's APY
+  // (the cheapest available). `avgRate` is the size-weighted average APY
+  // across all lenders, computed by the indexer as `cumulativeAvgApy` on
+  // the last step.
+  const depth = useMarketDepth(collateralToken.address, loanToken.address);
+  const steps = depth.data?.steps ?? [];
+  const bestRate = steps.length > 0 ? steps[0].apy : null;
+  const lastStep = steps.length > 0 ? steps[steps.length - 1] : null;
+  const avgRate = lastStep?.cumulativeAvgApy ?? null;
+  const ratesLoading = depth.isPending;
+
   return (
     <div className="flex flex-col gap-4">
       <Card>
         <p className="text-sm text-text-secondary">Rate</p>
-        <p className="mt-1 text-3xl font-semibold tabular-nums text-text-primary">
-          {formatPercent(market.ratePerSecond)}
-        </p>
+        <div className="mt-3 grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-wider text-text-muted">
+              Best
+            </p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-text-primary">
+              {ratesLoading
+                ? "…"
+                : bestRate !== null
+                  ? formatPercent(bestRate)
+                  : "—"}
+            </p>
+          </div>
+          <div className="border-l border-border pl-4">
+            <p className="text-xs uppercase tracking-wider text-text-muted">
+              Weighted avg
+            </p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-text-primary">
+              {ratesLoading
+                ? "…"
+                : avgRate !== null
+                  ? formatPercent(avgRate)
+                  : "—"}
+            </p>
+          </div>
+        </div>
       </Card>
 
       <Card>
@@ -232,38 +262,29 @@ function StatRow({
   );
 }
 
-// TODO: replace with real chart from historical-data endpoint.
-function ChartPlaceholder() {
+function DepthChartSection({ market }: { market: Market }) {
+  const { loanToken, collateralToken } = market;
+  const depth = useMarketDepth(collateralToken.address, loanToken.address);
+
+  if (depth.isPending) {
+    return (
+      <div className="flex h-72 items-center justify-center rounded-md border border-border bg-bg-sunken text-sm text-text-secondary">
+        Loading depth…
+      </div>
+    );
+  }
+  if (depth.isError || !depth.data) {
+    return (
+      <div className="flex h-72 items-center justify-center rounded-md border border-danger/30 bg-danger/10 text-sm text-text-secondary">
+        Couldn&apos;t load depth.
+      </div>
+    );
+  }
   return (
-    <div className="relative h-72 overflow-hidden rounded-md border border-border bg-bg-sunken">
-      <svg
-        viewBox="0 0 400 160"
-        preserveAspectRatio="none"
-        className="absolute inset-0 h-full w-full"
-        aria-hidden="true"
-      >
-        <defs>
-          <linearGradient id="chart-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path
-          d="M0,120 C40,90 80,110 120,80 C160,55 200,75 240,60 C280,48 320,70 360,40 L400,30 L400,160 L0,160 Z"
-          fill="url(#chart-fill)"
-        />
-        <path
-          d="M0,120 C40,90 80,110 120,80 C160,55 200,75 240,60 C280,48 320,70 360,40 L400,30"
-          fill="none"
-          stroke="var(--accent)"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <span className="absolute bottom-3 right-3 rounded-pill border border-border bg-bg/80 px-2 py-1 text-[10px] uppercase tracking-wider text-text-muted backdrop-blur">
-        Chart placeholder
-      </span>
-    </div>
+    <DepthChart
+      steps={depth.data.steps}
+      loanSymbol={loanToken.symbol}
+      loanDecimals={loanToken.decimals}
+    />
   );
 }

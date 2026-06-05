@@ -301,6 +301,71 @@
   animation: eyebrow-pulse 2400ms cubic-bezier(.22, 1, .36, 1) infinite;
 }
 
+/* Depth chart entrance. Used by <DepthChart>.
+   Sequence:
+     1. Gridlines + axes fade in immediately (cheap context).
+     2. The step path "draws" left-to-right via stroke-dashoffset.
+        Setting pathLength=1 on the <path> normalises the dash length so the
+        same keyframe works regardless of how long the actual path is.
+     3. The filled area rises from the X axis baseline (scaleY from origin
+        bottom) slightly behind the line.
+     4. Lender dots pop in after the line passes them.
+     5. APY labels fade up last.
+   All durations use ease-out-expo for the snappy/decelerating feel that
+   matches the rest of the app. */
+
+@keyframes depth-line-draw {
+  from { stroke-dashoffset: 1; }
+  to   { stroke-dashoffset: 0; }
+}
+
+@keyframes depth-area-rise {
+  from { transform: scaleY(0); opacity: 0; }
+  to   { transform: scaleY(1); opacity: 1; }
+}
+
+@keyframes depth-pop-in {
+  from { opacity: 0; transform: scale(0.4); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes depth-fade-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.depth-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: depth-line-draw 900ms cubic-bezier(.22, 1, .36, 1) 80ms forwards;
+}
+
+.depth-area {
+  transform: scaleY(0);
+  transform-origin: 50% 100%;
+  transform-box: fill-box;
+  opacity: 0;
+  animation: depth-area-rise 900ms cubic-bezier(.22, 1, .36, 1) 200ms forwards;
+}
+
+.depth-dot {
+  opacity: 0;
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: depth-pop-in 260ms cubic-bezier(.22, 1, .36, 1) forwards;
+}
+
+.depth-label {
+  opacity: 0;
+  transform-box: fill-box;
+  animation: depth-fade-up 320ms cubic-bezier(.22, 1, .36, 1) forwards;
+}
+
+.depth-gridline {
+  opacity: 0;
+  animation: depth-fade-up 320ms cubic-bezier(.22, 1, .36, 1) forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

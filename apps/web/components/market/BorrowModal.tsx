@@ -5,10 +5,17 @@ import { TriangleAlert } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { MockBadge } from "@/components/ui/MockBadge";
-import { BorrowFlowSankey } from "./BorrowFlowSankey";
-import { offersForPair, walkOrderbook } from "@/lib/lender-offers";
+import { BorrowFlowSankey, type BorrowFill } from "./BorrowFlowSankey";
 import type { Market } from "@/lib/markets";
-import { cn, formatCompact, formatPercent, formatUsd } from "@/lib/utils";
+import type { DepthStep } from "@/lib/api/market-depth";
+import { useMarketDepth } from "@/hooks/useMarketDepth";
+import { useTokenBalance } from "@/hooks/useTokenBalance";
+import {
+  cn,
+  formatPercent,
+  formatTokenAmount,
+  formatUsd,
+} from "@/lib/utils";
 
 interface BorrowModalProps {
   market: Market;
@@ -40,29 +47,15 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
     }
   }, [open]);
 
-  const offers = useMemo(
-    () => offersForPair(loanToken, collateralToken),
-    [loanToken, collateralToken],
+  // Real orderbook depth: pre-sorted steps from the indexer (cheapest
+  // rate first), one per lender qualifying for this pair.
+  const depthQuery = useMarketDepth(
+    collateralToken.address,
+    loanToken.address,
   );
-
-  const totalAvailable = useMemo(
-    () => offers.reduce((sum, o) => sum + o.indicativeSize.amount, 0),
-    [offers],
-  );
-
-  const requested = parseFloat(amountInput);
-  const requestedSafe =
-    Number.isFinite(requested) && requested > 0
-      ? Math.min(requested, totalAvailable)
-      : 0;
-  const slippagePct = parseFloat(slippageInput);
-  const slippageSafe = Number.isFinite(slippagePct) && slippagePct >= 0
-    ? slippagePct
-    : 0;
-
-  const walk = useMemo(
-    () => walkOrderbook(offers, requestedSafe),
-    [offers, requestedSafe],
+  const steps = useMemo<DepthStep[]>(
+    () => depthQuery.data?.steps ?? [],
+    [depthQuery.data],
   );
 
   // Real USD prices come through `Market.loanPriceUsd` /
@@ -72,10 +65,52 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
   const loanPrice = market.loanPriceUsd ?? 0;
   const collateralPrice = market.collateralPriceUsd ?? 0;
 
+  // Real on-chain ERC-20 balances.
+  //   - `loanBalance` powers the "Balance" subtitle under the input — it
+  //     matches the token the user is borrowing (mirrors a swap UI's
+  //     in-token balance).
+  //   - `collateralBalance` is the input to the MAX button and the
+  //     insufficient-collateral guard.
+  const loanBalance = useTokenBalance(loanToken);
+  const collateralBalance = useTokenBalance(collateralToken);
+
+  const maxBorrowFromCollateral = useMemo(() => {
+    if (
+      collateralPrice <= 0 ||
+      loanPrice <= 0 ||
+      hf <= 0 ||
+      lltv <= 0 ||
+      collateralBalance.amount <= 0
+    ) {
+      return 0;
+    }
+    return (collateralBalance.amount * collateralPrice * lltv) / (hf * loanPrice);
+  }, [collateralBalance.amount, collateralPrice, loanPrice, hf, lltv]);
+
+  const requested = parseFloat(amountInput);
+  const requestedSafe =
+    Number.isFinite(requested) && requested > 0 ? requested : 0;
+  const slippagePct = parseFloat(slippageInput);
+  const slippageSafe = Number.isFinite(slippagePct) && slippagePct >= 0
+    ? slippagePct
+    : 0;
+
+  // Walk the real depth top-down (cheapest first), filling `requestedSafe`
+  // from each lender's size until the borrow is satisfied or we run out.
+  const walk = useMemo(() => walkDepth(steps, requestedSafe), [
+    steps,
+    requestedSafe,
+  ]);
+
   const borrowUsd = requestedSafe * loanPrice;
   const requiredCollateralUsd = lltv > 0 ? (hf * borrowUsd) / lltv : 0;
   const requiredCollateralAmount =
     collateralPrice > 0 ? requiredCollateralUsd / collateralPrice : 0;
+
+  const exceedsCollateral =
+    requestedSafe > 0 &&
+    maxBorrowFromCollateral > 0 &&
+    requestedSafe > maxBorrowFromCollateral + 1e-9;
 
   const maxAvgRate = walk.bestRate * (1 + slippageSafe / 100);
 
@@ -83,10 +118,14 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
     requestedSafe > 0 && walk.weightedAvgRate > maxAvgRate + 1e-9;
 
   const valid =
-    requestedSafe > 0 && walk.fills.length > 0 && !slippageExceeded;
+    requestedSafe > 0 &&
+    walk.fills.length > 0 &&
+    !slippageExceeded &&
+    !exceedsCollateral;
 
   const handleMaxAvailable = () => {
-    const rounded = Math.round(totalAvailable * 1e8) / 1e8;
+    if (maxBorrowFromCollateral <= 0) return;
+    const rounded = Math.floor(maxBorrowFromCollateral * 1e8) / 1e8;
     setAmountInput(String(rounded));
   };
 
@@ -111,17 +150,17 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
         The router walks the order book top-down to fill your size.
       </p>
 
-      {/* TODO(remove-when-real): borrow-side mocks. The lender orderbook
-          (best rate, MAX, fill walk, weighted-avg rate) is fed by
-          `lib/lender-offers.ts` and `BiviumRouter.borrow` isn't wired —
-          the submit button only fires a setTimeout. Real prices, LLTV,
-          and required collateral come from the API. */}
+      {/* TODO(remove-when-real): the Borrow button still only fires a
+          setTimeout — `BiviumRouter.borrow` isn't wired through a write
+          hook yet. Everything else (orderbook depth, prices, LLTV,
+          required-collateral math) reads from the indexer / chain. */}
       <div className="mt-4 flex items-start gap-2 rounded-md border-2 border-danger bg-danger/5 p-3 text-xs text-text-secondary">
-        <MockBadge>Mock data</MockBadge>
+        <MockBadge>Mock submit</MockBadge>
         <p>
-          The orderbook (best rate, available depth, fill walk, weighted-avg
-          rate) and the Borrow submit are placeholders. Token prices, LLTV,
-          and required-collateral math are real.
+          The Borrow button is a placeholder — clicking it doesn&apos;t
+          execute a real <span className="font-mono">BiviumRouter.borrow</span>{" "}
+          yet. The orderbook walk, rates, prices, and collateral math are all
+          real.
         </p>
       </div>
 
@@ -142,18 +181,7 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
               onChange={(e) => {
                 const v = e.target.value;
                 if (v !== "" && !/^\d*\.?\d*$/.test(v)) return;
-                const parsed = parseFloat(v);
-                if (
-                  Number.isFinite(parsed) &&
-                  parsed > totalAvailable &&
-                  totalAvailable > 0
-                ) {
-                  setAmountInput(
-                    String(Math.round(totalAvailable * 1e8) / 1e8),
-                  );
-                } else {
-                  setAmountInput(v);
-                }
+                setAmountInput(v);
               }}
               aria-label={`Borrow amount in ${loanToken.symbol}`}
               className="w-full bg-transparent text-2xl font-medium tabular-nums text-text-primary placeholder:text-text-muted focus:outline-none"
@@ -176,14 +204,22 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
           <div className="mt-2 flex items-center justify-between text-xs text-text-muted">
             <span className="tabular-nums">{formatUsd(borrowUsd)}</span>
             <span className="tabular-nums">
-              Available {formatCompact(totalAvailable)} {loanToken.symbol}
-              <button
-                type="button"
-                onClick={handleMaxAvailable}
-                className="ml-2 font-semibold text-accent transition-colors duration-base ease-out-expo hover:text-accent-hover"
-              >
-                MAX
-              </button>
+              Balance{" "}
+              {loanBalance.isLoading
+                ? "…"
+                : `${formatTokenAmount(loanBalance.amount, {
+                    decimals: Math.min(loanToken.decimals, 6),
+                  })} ${loanToken.symbol}`}
+              {maxBorrowFromCollateral > 0 ? (
+                <button
+                  type="button"
+                  onClick={handleMaxAvailable}
+                  title={`Borrow up to ${formatTokenAmount(maxBorrowFromCollateral, { decimals: Math.min(loanToken.decimals, 6) })} ${loanToken.symbol} against your current ${collateralToken.symbol} balance`}
+                  className="ml-2 font-semibold text-accent transition-colors duration-base ease-out-expo hover:text-accent-hover"
+                >
+                  MAX
+                </button>
+              ) : null}
             </span>
           </div>
         </div>
@@ -249,25 +285,28 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
       {walk.fills.length > 0 ? (
         <div className="mt-5">
           <div className="mb-2 flex items-baseline justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <p className="text-sm text-text-secondary">Order book fill</p>
-              <MockBadge />
-            </div>
+            <p className="text-sm text-text-secondary">Order book fill</p>
             <span className="text-xs text-text-muted">
               {walk.fills.length} lender{walk.fills.length === 1 ? "" : "s"} ·
               avg {formatPercent(walk.weightedAvgRate)}
             </span>
           </div>
-          {/* TODO(remove-when-real): Sankey reads from the mocked orderbook
-              walk. Drop the !border-danger override when the depth API
-              endpoint is wired. */}
-          <div className="rounded-md border-2 border-danger p-2">
+          <div className="rounded-md border border-border p-2">
             <BorrowFlowSankey fills={walk.fills} loanToken={loanToken} />
           </div>
         </div>
       ) : null}
 
-      {slippageExceeded ? (
+      {exceedsCollateral ? (
+        <Alert>
+          Your current {collateralToken.symbol} balance only supports borrowing{" "}
+          up to{" "}
+          {formatTokenAmount(maxBorrowFromCollateral, {
+            decimals: Math.min(loanToken.decimals, 6),
+          })}{" "}
+          {loanToken.symbol} at HF {hf.toFixed(1)}.
+        </Alert>
+      ) : slippageExceeded ? (
         <Alert>
           Filling the requested size would push the average rate to{" "}
           {formatPercent(walk.weightedAvgRate)}, above your{" "}
@@ -279,7 +318,9 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
       <div className="mt-5 rounded-md border border-border bg-bg px-3 py-3 text-sm">
         <SummaryRow
           label="Required collateral"
-          value={`${formatCompact(requiredCollateralAmount)} ${collateralToken.symbol}`}
+          value={`${formatTokenAmount(requiredCollateralAmount, {
+            decimals: Math.min(collateralToken.decimals, 8),
+          })} ${collateralToken.symbol}`}
           sub={formatUsd(requiredCollateralUsd)}
         />
         <Divider />
@@ -306,9 +347,11 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
           ? "Confirming…"
           : requestedSafe <= 0
             ? "Enter an amount"
-            : slippageExceeded
-              ? "Rate exceeds slippage"
-              : `Borrow ${loanToken.symbol}`}
+            : exceedsCollateral
+              ? "Insufficient collateral"
+              : slippageExceeded
+                ? "Rate exceeds slippage"
+                : `Borrow ${loanToken.symbol}`}
       </Button>
     </Modal>
   );
@@ -338,6 +381,39 @@ function SummaryRow({
 
 function Divider() {
   return <div className="border-t border-border" />;
+}
+
+interface DepthWalk {
+  fills: BorrowFill[];
+  totalFilled: number;
+  weightedAvgRate: number;
+  bestRate: number;
+}
+
+// Greedy top-down walk over the real depth steps. Steps come from the
+// indexer pre-sorted by ratePerSecond ascending, so the cheapest lender
+// fills first. Each step contributes at most `step.sizeAmount` to the
+// borrow.
+function walkDepth(steps: DepthStep[], requested: number): DepthWalk {
+  let remaining = requested;
+  let rateXSize = 0;
+  const fills: BorrowFill[] = [];
+  for (const step of steps) {
+    if (remaining <= 1e-12) break;
+    const take = Math.min(remaining, step.sizeAmount);
+    if (take > 1e-12) {
+      fills.push({ lender: step.lender, ratePerSecond: step.apy, amount: take });
+      rateXSize += step.apy * take;
+      remaining -= take;
+    }
+  }
+  const totalFilled = Math.max(0, requested - remaining);
+  return {
+    fills,
+    totalFilled,
+    weightedAvgRate: totalFilled > 0 ? rateXSize / totalFilled : 0,
+    bestRate: steps.length > 0 ? steps[0].apy : 0,
+  };
 }
 
 function Alert({ children }: { children: React.ReactNode }) {
