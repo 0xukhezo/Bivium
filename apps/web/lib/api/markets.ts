@@ -24,10 +24,10 @@ interface ApiMarketRow {
 interface ApiToken {
   address: string;
   symbol: string;
-  name: string;
+  name: string | null;
   decimals: number;
-  logoUrl: string;
-  priceUsd: number;
+  logoUrl: string | null;
+  priceUsd: number | null;
 }
 
 // TODO: drop once the list endpoint surfaces oracle + creator.
@@ -68,8 +68,9 @@ function adaptMarket(row: ApiMarketRow): Market {
   const denom = 10 ** loanToken.decimals;
   const supplyAmount = Number(BigInt(row.totalLiquidity)) / denom;
   const borrowAmount = Number(BigInt(row.totalBorrowed)) / denom;
-  const supplyUsd = supplyAmount * row.loan.priceUsd;
-  const borrowUsd = borrowAmount * row.loan.priceUsd;
+  const loanPrice = row.loan.priceUsd ?? 0;
+  const supplyUsd = supplyAmount * loanPrice;
+  const borrowUsd = borrowAmount * loanPrice;
 
   const ratePerSecond = row.bestRatePerSecond
     ? ratePerSecondToAnnual(BigInt(row.bestRatePerSecond))
@@ -88,6 +89,8 @@ function adaptMarket(row: ApiMarketRow): Market {
     totalSupplyShares: supplyAmount,
     totalBorrowShares: borrowAmount,
     lastAccrualTimestamp: 0,
+    loanPriceUsd: row.loan.priceUsd ?? null,
+    collateralPriceUsd: row.collateral.priceUsd ?? null,
   };
 }
 
@@ -97,10 +100,10 @@ function adaptToken(t: ApiToken): Token {
   return {
     address: t.address as `0x${string}`,
     symbol: t.symbol,
-    name: t.name,
+    name: t.name ?? t.symbol,
     decimals: t.decimals,
     chainId: arbitrum.id,
-    iconUrl: known?.iconUrl ?? t.logoUrl,
+    iconUrl: known?.iconUrl ?? t.logoUrl ?? "",
   };
 }
 

@@ -5,6 +5,7 @@ import { notFound, useParams } from "next/navigation";
 import { useEffect, useMemo } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
+import { MockBadge } from "@/components/ui/MockBadge";
 import { LenderOrderbook } from "@/components/market/LenderOrderbook";
 import { MarketDetailActions } from "@/components/market/MarketDetailActions";
 import { useMarkets } from "@/hooks/useMarkets";
@@ -228,17 +229,6 @@ function StatRow({
         <p className="mt-0.5 text-xs tabular-nums text-text-muted">{sub}</p>
       ) : null}
     </div>
-  );
-}
-
-// Visible marker that the surrounding card is still fed by mocks. Pairs
-// with the red border on the parent Card. Delete this component once both
-// the chart and the order book read from the indexer.
-function MockBadge() {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-pill border border-danger/40 bg-danger/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-danger">
-      Mock data
-    </span>
   );
 }
 

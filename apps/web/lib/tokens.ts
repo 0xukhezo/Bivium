@@ -62,13 +62,3 @@ export function getTokenByAddress(address: string): Token | undefined {
   return SUPPORTED_TOKENS.find((t) => t.address.toLowerCase() === needle);
 }
 
-const MOCK_PRICES_USD: Record<string, number> = {
-  USDC: 1,
-  WBTC: 70_000,
-  WETH: 3_500,
-  LINK: 8,
-};
-
-export function getMockPriceUsd(token: Token): number {
-  return MOCK_PRICES_USD[token.symbol] ?? 1;
-}

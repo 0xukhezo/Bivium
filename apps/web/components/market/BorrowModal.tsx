@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { TriangleAlert } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { MockBadge } from "@/components/ui/MockBadge";
 import { BorrowFlowSankey } from "./BorrowFlowSankey";
 import { offersForPair, walkOrderbook } from "@/lib/lender-offers";
-import { getMockPriceUsd } from "@/lib/tokens";
 import type { Market } from "@/lib/markets";
 import { cn, formatCompact, formatPercent, formatUsd } from "@/lib/utils";
 
@@ -65,8 +65,12 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
     [offers, requestedSafe],
   );
 
-  const loanPrice = getMockPriceUsd(loanToken);
-  const collateralPrice = getMockPriceUsd(collateralToken);
+  // Real USD prices come through `Market.loanPriceUsd` /
+  // `Market.collateralPriceUsd` from the indexer-curated `tokens` table.
+  // Fall back to 0 only when a price is missing — the dependent UI shows
+  // `$0.00` rather than a fake number.
+  const loanPrice = market.loanPriceUsd ?? 0;
+  const collateralPrice = market.collateralPriceUsd ?? 0;
 
   const borrowUsd = requestedSafe * loanPrice;
   const requiredCollateralUsd = lltv > 0 ? (hf * borrowUsd) / lltv : 0;
@@ -106,6 +110,20 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
         Borrow {loanToken.symbol} against {collateralToken.symbol} collateral.
         The router walks the order book top-down to fill your size.
       </p>
+
+      {/* TODO(remove-when-real): borrow-side mocks. The lender orderbook
+          (best rate, MAX, fill walk, weighted-avg rate) is fed by
+          `lib/lender-offers.ts` and `BiviumRouter.borrow` isn't wired —
+          the submit button only fires a setTimeout. Real prices, LLTV,
+          and required collateral come from the API. */}
+      <div className="mt-4 flex items-start gap-2 rounded-md border-2 border-danger bg-danger/5 p-3 text-xs text-text-secondary">
+        <MockBadge>Mock data</MockBadge>
+        <p>
+          The orderbook (best rate, available depth, fill walk, weighted-avg
+          rate) and the Borrow submit are placeholders. Token prices, LLTV,
+          and required-collateral math are real.
+        </p>
+      </div>
 
       <div className="mt-5">
         <div className="mb-2 flex items-baseline justify-between gap-2">
@@ -231,13 +249,19 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
       {walk.fills.length > 0 ? (
         <div className="mt-5">
           <div className="mb-2 flex items-baseline justify-between gap-2">
-            <p className="text-sm text-text-secondary">Order book fill</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-text-secondary">Order book fill</p>
+              <MockBadge />
+            </div>
             <span className="text-xs text-text-muted">
               {walk.fills.length} lender{walk.fills.length === 1 ? "" : "s"} ·
               avg {formatPercent(walk.weightedAvgRate)}
             </span>
           </div>
-          <div className="rounded-md border border-border p-2">
+          {/* TODO(remove-when-real): Sankey reads from the mocked orderbook
+              walk. Drop the !border-danger override when the depth API
+              endpoint is wired. */}
+          <div className="rounded-md border-2 border-danger p-2">
             <BorrowFlowSankey fills={walk.fills} loanToken={loanToken} />
           </div>
         </div>

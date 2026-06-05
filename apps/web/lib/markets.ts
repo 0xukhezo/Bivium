@@ -16,6 +16,10 @@ export interface Market {
   totalBorrowShares: number;
   /** Unix seconds. */
   lastAccrualTimestamp: number;
+  /** Indexer-curated USD price for the loan token. `null` when missing. */
+  loanPriceUsd: number | null;
+  /** Indexer-curated USD price for the collateral token. `null` when missing. */
+  collateralPriceUsd: number | null;
 }
 
 const PRICES_USD: Record<string, number> = {
@@ -63,6 +67,8 @@ export const MOCK_MARKETS: Market[] = TOKEN_PAIRS.map(([collateral, loan], i) =>
     totalSupplyShares: supplyAmount,
     totalBorrowShares: borrowAmount,
     lastAccrualTimestamp: NOW,
+    loanPriceUsd: loanPrice,
+    collateralPriceUsd: PRICES_USD[collateral.symbol] ?? null,
   };
 });
 
