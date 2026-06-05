@@ -1,16 +1,24 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { TriangleAlert } from "lucide-react";
+import { parseUnits } from "viem";
 import { Modal } from "@/components/ui/Modal";
-import { Button } from "@/components/ui/Button";
-import { MockBadge } from "@/components/ui/MockBadge";
+import { ChainAwareButton } from "@/components/wallet/ChainAwareButton";
 import { BorrowFlowSankey, type BorrowFill } from "./BorrowFlowSankey";
 import type { Market } from "@/lib/markets";
 import type { DepthStep } from "@/lib/api/market-depth";
+import { CONTRACT_ADDRESSES } from "@/lib/contracts/addresses";
 import { useMarketDepth } from "@/hooks/useMarketDepth";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
+import { useTokenAllowance } from "@/hooks/useTokenAllowance";
+import { useApprove } from "@/hooks/useApprove";
+import { useBorrow, type BorrowOrder } from "@/hooks/useBiviumRouterWrite";
+import { toast } from "@/lib/toast";
+import { humanizeError } from "@/lib/errors";
 import {
+  annualRateToRatePerSecond,
   cn,
   formatPercent,
   formatTokenAmount,
@@ -32,18 +40,18 @@ const SLIPPAGE_DEFAULT = "1"; // % over the best book rate
 
 export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
   const { loanToken, collateralToken, lltv } = market;
+  const queryClient = useQueryClient();
+  const routerAddress = CONTRACT_ADDRESSES.router;
 
   const [amountInput, setAmountInput] = useState("");
   const [hf, setHf] = useState(HF_DEFAULT);
   const [slippageInput, setSlippageInput] = useState(SLIPPAGE_DEFAULT);
-  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (open) {
       setAmountInput("");
       setHf(HF_DEFAULT);
       setSlippageInput(SLIPPAGE_DEFAULT);
-      setSubmitting(false);
     }
   }, [open]);
 
@@ -65,14 +73,15 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
   const loanPrice = market.loanPriceUsd ?? 0;
   const collateralPrice = market.collateralPriceUsd ?? 0;
 
-  // Real on-chain ERC-20 balances.
-  //   - `loanBalance` powers the "Balance" subtitle under the input — it
-  //     matches the token the user is borrowing (mirrors a swap UI's
-  //     in-token balance).
-  //   - `collateralBalance` is the input to the MAX button and the
-  //     insufficient-collateral guard.
-  const loanBalance = useTokenBalance(loanToken);
+  // User's real on-chain collateral balance via ERC20.balanceOf — used as
+  // the ceiling for MAX and the insufficient-collateral guard. We
+  // deliberately don't read the loan-token balance: in a borrow flow the
+  // useful "balance" reference is the available orderbook depth, not how
+  // much of the loan token the user happens to hold.
   const collateralBalance = useTokenBalance(collateralToken);
+
+  // Total fillable depth across all lenders, in loan-token units.
+  const availableDepth = depthQuery.data?.totalAvailable ?? 0;
 
   const maxBorrowFromCollateral = useMemo(() => {
     if (
@@ -86,6 +95,14 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
     }
     return (collateralBalance.amount * collateralPrice * lltv) / (hf * loanPrice);
   }, [collateralBalance.amount, collateralPrice, loanPrice, hf, lltv]);
+
+  // Effective ceiling for MAX — whichever runs out first: the lenders'
+  // available depth, or what the user's collateral can back.
+  const maxBorrowEffective = useMemo(() => {
+    if (maxBorrowFromCollateral <= 0) return 0;
+    if (availableDepth <= 0) return 0;
+    return Math.min(maxBorrowFromCollateral, availableDepth);
+  }, [maxBorrowFromCollateral, availableDepth]);
 
   const requested = parseFloat(amountInput);
   const requestedSafe =
@@ -112,31 +129,153 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
     maxBorrowFromCollateral > 0 &&
     requestedSafe > maxBorrowFromCollateral + 1e-9;
 
+  const exceedsDepth =
+    requestedSafe > 0 &&
+    availableDepth > 0 &&
+    requestedSafe > availableDepth + 1e-9;
+
+  // True when the user simply doesn't hold enough of the collateral token
+  // to cover the required deposit. Distinct from `exceedsCollateral`
+  // (which says "borrow too large for the value of your collateral at HF").
+  // Wait for the balance read to resolve before flagging — otherwise the
+  // alert flashes while wagmi fetches.
+  const insufficientCollateralBalance =
+    !collateralBalance.isLoading &&
+    requiredCollateralAmount > 0 &&
+    collateralBalance.amount + 1e-9 < requiredCollateralAmount;
+
   const maxAvgRate = walk.bestRate * (1 + slippageSafe / 100);
 
   const slippageExceeded =
     requestedSafe > 0 && walk.weightedAvgRate > maxAvgRate + 1e-9;
 
+  // Base-unit conversions for the on-chain call. `parseUnits` handles
+  // decimals safely; we round up the collateral so the Router's required
+  // amount is fully covered after FP-to-bigint quantisation.
+  const loanAmountWei = useMemo(() => {
+    if (requestedSafe <= 0) return 0n;
+    try {
+      return parseUnits(requestedSafe.toString(), loanToken.decimals);
+    } catch {
+      return 0n;
+    }
+  }, [requestedSafe, loanToken.decimals]);
+  const collateralAmountWei = useMemo(() => {
+    if (requiredCollateralAmount <= 0) return 0n;
+    try {
+      // Round up to next base unit so quantisation never under-collateralises.
+      const dust = 10 ** -collateralToken.decimals;
+      return parseUnits(
+        (requiredCollateralAmount + dust).toFixed(collateralToken.decimals),
+        collateralToken.decimals,
+      );
+    } catch {
+      return 0n;
+    }
+  }, [requiredCollateralAmount, collateralToken.decimals]);
+
+  // Allowance + write hooks. Approve uses ERC-20 `approve(router, amount)`;
+  // borrow uses `BiviumRouter.borrow(BorrowOrder)`.
+  const allowance = useTokenAllowance(collateralToken, routerAddress);
+  const approveHook = useApprove(collateralToken, routerAddress);
+  const borrowHook = useBorrow();
+
+  const approving = approveHook.isPending || approveHook.isConfirming;
+  const borrowing = borrowHook.isPending || borrowHook.isConfirming;
+  const submitting = approving || borrowing;
+
+  const needsApproval =
+    collateralAmountWei > 0n && allowance.allowance < collateralAmountWei;
+
   const valid =
     requestedSafe > 0 &&
     walk.fills.length > 0 &&
     !slippageExceeded &&
-    !exceedsCollateral;
+    !exceedsCollateral &&
+    !exceedsDepth &&
+    !insufficientCollateralBalance &&
+    !!routerAddress;
 
   const handleMaxAvailable = () => {
-    if (maxBorrowFromCollateral <= 0) return;
-    const rounded = Math.floor(maxBorrowFromCollateral * 1e8) / 1e8;
+    if (maxBorrowEffective <= 0) return;
+    const rounded = Math.floor(maxBorrowEffective * 1e8) / 1e8;
     setAmountInput(String(rounded));
   };
 
-  const submit = async () => {
-    if (!valid) return;
-    setSubmitting(true);
-    // TODO: wire BiviumRouter.borrow via useBiviumRouterWrite.
-    await new Promise((r) => setTimeout(r, 1400));
-    setSubmitting(false);
-    onClose();
+  const submit = () => {
+    if (!valid || submitting) return;
+    if (needsApproval) {
+      approveHook.approve(collateralAmountWei);
+      return;
+    }
+    if (!routerAddress) return;
+    const order: BorrowOrder = {
+      loanToken: loanToken.address,
+      collateralToken: collateralToken.address,
+      loanAmount: loanAmountWei,
+      collateralAmount: collateralAmountWei,
+      maxAvgRatePerSecond: annualRateToRatePerSecond(maxAvgRate),
+      minHealthFactor: BigInt(Math.round(hf * 1e18)),
+      candidates: walk.fills.map((f) => ({
+        creator: f.lender as `0x${string}`,
+        ratePerSecond: f.ratePerSecondRaw,
+      })),
+    };
+    borrowHook.borrow(order);
   };
+
+  // Approve landed → refetch allowance so the button flips to "Borrow".
+  useEffect(() => {
+    if (!approveHook.isSuccess) return;
+    allowance.refetch();
+    toast.success(`${collateralToken.symbol} approved`, {
+      description: `The router can now pull collateral for this borrow.`,
+    });
+    approveHook.reset();
+  }, [approveHook.isSuccess, approveHook, allowance, collateralToken.symbol]);
+
+  useEffect(() => {
+    if (!approveHook.error) return;
+    toast.error("Approval failed", {
+      description: humanizeError(approveHook.error),
+    });
+    approveHook.reset();
+  }, [approveHook.error, approveHook]);
+
+  // Borrow landed → toast, invalidate borrower-loans + balances + markets,
+  // close.
+  useEffect(() => {
+    if (!borrowHook.isSuccess) return;
+    toast.success(
+      `Borrowed ${formatTokenAmount(requestedSafe, {
+        decimals: Math.min(loanToken.decimals, 6),
+      })} ${loanToken.symbol}`,
+      {
+        description: `Repay any time from the dashboard.`,
+      },
+    );
+    queryClient.invalidateQueries({ queryKey: ["borrower-loans"] });
+    queryClient.invalidateQueries({ queryKey: ["market-depth"] });
+    queryClient.invalidateQueries({ queryKey: ["markets"] });
+    borrowHook.reset();
+    onClose();
+  }, [
+    borrowHook.isSuccess,
+    borrowHook,
+    queryClient,
+    requestedSafe,
+    loanToken.decimals,
+    loanToken.symbol,
+    onClose,
+  ]);
+
+  useEffect(() => {
+    if (!borrowHook.error) return;
+    toast.error("Borrow failed", {
+      description: humanizeError(borrowHook.error),
+    });
+    borrowHook.reset();
+  }, [borrowHook.error, borrowHook]);
 
   return (
     <Modal
@@ -149,20 +288,6 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
         Borrow {loanToken.symbol} against {collateralToken.symbol} collateral.
         The router walks the order book top-down to fill your size.
       </p>
-
-      {/* TODO(remove-when-real): the Borrow button still only fires a
-          setTimeout — `BiviumRouter.borrow` isn't wired through a write
-          hook yet. Everything else (orderbook depth, prices, LLTV,
-          required-collateral math) reads from the indexer / chain. */}
-      <div className="mt-4 flex items-start gap-2 rounded-md border-2 border-danger bg-danger/5 p-3 text-xs text-text-secondary">
-        <MockBadge>Mock submit</MockBadge>
-        <p>
-          The Borrow button is a placeholder — clicking it doesn&apos;t
-          execute a real <span className="font-mono">BiviumRouter.borrow</span>{" "}
-          yet. The orderbook walk, rates, prices, and collateral math are all
-          real.
-        </p>
-      </div>
 
       <div className="mt-5">
         <div className="mb-2 flex items-baseline justify-between gap-2">
@@ -181,6 +306,20 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
               onChange={(e) => {
                 const v = e.target.value;
                 if (v !== "" && !/^\d*\.?\d*$/.test(v)) return;
+                // Clamp on type to the orderbook's available depth — you
+                // can't borrow more than the book can fill, so don't let
+                // the user type past it.
+                const parsed = parseFloat(v);
+                if (
+                  Number.isFinite(parsed) &&
+                  availableDepth > 0 &&
+                  parsed > availableDepth
+                ) {
+                  setAmountInput(
+                    String(Math.floor(availableDepth * 1e8) / 1e8),
+                  );
+                  return;
+                }
                 setAmountInput(v);
               }}
               aria-label={`Borrow amount in ${loanToken.symbol}`}
@@ -204,17 +343,21 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
           <div className="mt-2 flex items-center justify-between text-xs text-text-muted">
             <span className="tabular-nums">{formatUsd(borrowUsd)}</span>
             <span className="tabular-nums">
-              Balance{" "}
-              {loanBalance.isLoading
+              Available{" "}
+              {depthQuery.isPending
                 ? "…"
-                : `${formatTokenAmount(loanBalance.amount, {
+                : `${formatTokenAmount(availableDepth, {
                     decimals: Math.min(loanToken.decimals, 6),
                   })} ${loanToken.symbol}`}
-              {maxBorrowFromCollateral > 0 ? (
+              {maxBorrowEffective > 0 ? (
                 <button
                   type="button"
                   onClick={handleMaxAvailable}
-                  title={`Borrow up to ${formatTokenAmount(maxBorrowFromCollateral, { decimals: Math.min(loanToken.decimals, 6) })} ${loanToken.symbol} against your current ${collateralToken.symbol} balance`}
+                  title={
+                    maxBorrowFromCollateral < availableDepth
+                      ? `Capped by your ${collateralToken.symbol} collateral at HF ${hf.toFixed(1)} — borrow up to ${formatTokenAmount(maxBorrowEffective, { decimals: Math.min(loanToken.decimals, 6) })} ${loanToken.symbol}`
+                      : `Capped by available orderbook depth — borrow up to ${formatTokenAmount(maxBorrowEffective, { decimals: Math.min(loanToken.decimals, 6) })} ${loanToken.symbol}`
+                  }
                   className="ml-2 font-semibold text-accent transition-colors duration-base ease-out-expo hover:text-accent-hover"
                 >
                   MAX
@@ -297,7 +440,27 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
         </div>
       ) : null}
 
-      {exceedsCollateral ? (
+      {insufficientCollateralBalance ? (
+        <Alert>
+          You need{" "}
+          {formatTokenAmount(requiredCollateralAmount, {
+            decimals: Math.min(collateralToken.decimals, 8),
+          })}{" "}
+          {collateralToken.symbol} as collateral but your wallet only holds{" "}
+          {formatTokenAmount(collateralBalance.amount, {
+            decimals: Math.min(collateralToken.decimals, 8),
+          })}{" "}
+          {collateralToken.symbol}.
+        </Alert>
+      ) : exceedsDepth ? (
+        <Alert>
+          The orderbook only has{" "}
+          {formatTokenAmount(availableDepth, {
+            decimals: Math.min(loanToken.decimals, 6),
+          })}{" "}
+          {loanToken.symbol} available across all lenders for this pair.
+        </Alert>
+      ) : exceedsCollateral ? (
         <Alert>
           Your current {collateralToken.symbol} balance only supports borrowing{" "}
           up to{" "}
@@ -336,23 +499,30 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
         />
       </div>
 
-      <Button
+      <ChainAwareButton
         variant="primary"
         size="lg"
         className="mt-6 w-full"
         onClick={submit}
         disabled={!valid || submitting}
       >
-        {submitting
-          ? "Confirming…"
-          : requestedSafe <= 0
-            ? "Enter an amount"
-            : exceedsCollateral
-              ? "Insufficient collateral"
-              : slippageExceeded
-                ? "Rate exceeds slippage"
-                : `Borrow ${loanToken.symbol}`}
-      </Button>
+        {buttonLabel({
+          submitting,
+          approving,
+          borrowing,
+          isConfirmingApprove: approveHook.isConfirming,
+          isConfirmingBorrow: borrowHook.isConfirming,
+          requestedSafe,
+          exceedsCollateral,
+          exceedsDepth,
+          insufficientCollateralBalance,
+          slippageExceeded,
+          needsApproval,
+          loanSymbol: loanToken.symbol,
+          collateralSymbol: collateralToken.symbol,
+          routerConfigured: !!routerAddress,
+        })}
+      </ChainAwareButton>
     </Modal>
   );
 }
@@ -402,7 +572,12 @@ function walkDepth(steps: DepthStep[], requested: number): DepthWalk {
     if (remaining <= 1e-12) break;
     const take = Math.min(remaining, step.sizeAmount);
     if (take > 1e-12) {
-      fills.push({ lender: step.lender, ratePerSecond: step.apy, amount: take });
+      fills.push({
+        lender: step.lender,
+        ratePerSecond: step.apy,
+        ratePerSecondRaw: step.ratePerSecondRaw,
+        amount: take,
+      });
       rateXSize += step.apy * take;
       remaining -= take;
     }
@@ -414,6 +589,39 @@ function walkDepth(steps: DepthStep[], requested: number): DepthWalk {
     weightedAvgRate: totalFilled > 0 ? rateXSize / totalFilled : 0,
     bestRate: steps.length > 0 ? steps[0].apy : 0,
   };
+}
+
+interface ButtonLabelArgs {
+  submitting: boolean;
+  approving: boolean;
+  borrowing: boolean;
+  isConfirmingApprove: boolean;
+  isConfirmingBorrow: boolean;
+  requestedSafe: number;
+  exceedsCollateral: boolean;
+  exceedsDepth: boolean;
+  insufficientCollateralBalance: boolean;
+  slippageExceeded: boolean;
+  needsApproval: boolean;
+  loanSymbol: string;
+  collateralSymbol: string;
+  routerConfigured: boolean;
+}
+
+function buttonLabel(a: ButtonLabelArgs): string {
+  if (!a.routerConfigured) return "Router not configured";
+  if (a.approving)
+    return a.isConfirmingApprove ? "Confirming approval…" : "Sign approval…";
+  if (a.borrowing)
+    return a.isConfirmingBorrow ? "Confirming borrow…" : "Sign borrow…";
+  if (a.requestedSafe <= 0) return "Enter an amount";
+  if (a.insufficientCollateralBalance)
+    return `Not enough ${a.collateralSymbol}`;
+  if (a.exceedsDepth) return "Not enough depth";
+  if (a.exceedsCollateral) return "Insufficient collateral";
+  if (a.slippageExceeded) return "Rate exceeds slippage";
+  if (a.needsApproval) return `Approve ${a.collateralSymbol}`;
+  return `Borrow ${a.loanSymbol}`;
 }
 
 function Alert({ children }: { children: React.ReactNode }) {

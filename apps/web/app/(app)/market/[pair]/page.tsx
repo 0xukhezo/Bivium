@@ -280,11 +280,14 @@ function DepthChartSection({ market }: { market: Market }) {
       </div>
     );
   }
+  const steps = depth.data.steps;
+  const lastStep = steps.length > 0 ? steps[steps.length - 1] : null;
   return (
     <DepthChart
-      steps={depth.data.steps}
+      steps={steps}
       loanSymbol={loanToken.symbol}
       loanDecimals={loanToken.decimals}
+      avgRate={lastStep?.cumulativeAvgApy ?? null}
     />
   );
 }

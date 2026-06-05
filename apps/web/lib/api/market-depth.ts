@@ -6,6 +6,11 @@ export interface DepthStep {
   lender: `0x${string}`;
   /** Annualised rate, 0–1 fraction. */
   apy: number;
+  /**
+   * 1e18 fixed-point ratePerSecond, kept raw for contract calls (the
+   * Router's BorrowOrder.candidates wants this exact bigint).
+   */
+  ratePerSecondRaw: bigint;
   /** Lender size in loan-token base units, decoded to a JS number. */
   sizeAmount: number;
   sizeUsd: number | null;
@@ -96,6 +101,7 @@ function adapt(d: ApiDepthData): MarketDepth {
     steps: d.steps.map((s) => ({
       lender: s.lender as `0x${string}`,
       apy: s.apy,
+      ratePerSecondRaw: BigInt(s.ratePerSecond),
       sizeAmount: Number(BigInt(s.size)) / denom,
       sizeUsd: s.sizeUsd,
       cumulativeAmount: Number(BigInt(s.cumulativeSize)) / denom,

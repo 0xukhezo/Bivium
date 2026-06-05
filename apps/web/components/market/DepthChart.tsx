@@ -8,6 +8,12 @@ interface DepthChartProps {
   steps: DepthStep[];
   loanSymbol: string;
   loanDecimals: number;
+  /**
+   * Optional size-weighted average APY across the whole book. When set,
+   * the chart draws a dotted horizontal reference line at this rate.
+   * Pass `null` to suppress.
+   */
+  avgRate?: number | null;
 }
 
 // Step plot — X is the cumulative borrow size in loan-token units, Y is the
@@ -33,6 +39,7 @@ export function DepthChart({
   steps,
   loanSymbol,
   loanDecimals,
+  avgRate = null,
 }: DepthChartProps) {
   const chart = {
     x: PAD.left,
@@ -237,6 +244,49 @@ export function DepthChart({
           stroke="var(--border)"
           strokeWidth={1}
         />
+
+        {/* Size-weighted average rate reference. Dotted horizontal line +
+            inline "avg X.XX%" badge anchored at the right edge. Only drawn
+            when the avg falls inside the visible Y range. */}
+        {avgRate !== null && avgRate >= yMin && avgRate <= yMax ? (
+          <g
+            className="depth-label"
+            style={{ animationDelay: `${80 + 900 + 120}ms` }}
+          >
+            <line
+              x1={chart.x}
+              x2={chart.x + chart.w}
+              y1={sy(avgRate)}
+              y2={sy(avgRate)}
+              stroke="var(--text-secondary)"
+              strokeWidth={1}
+              strokeDasharray="3 3"
+              strokeOpacity={0.7}
+            />
+            <rect
+              x={chart.x + chart.w - 88}
+              y={sy(avgRate) - 10}
+              width={84}
+              height={18}
+              rx={9}
+              fill="var(--bg-elevated)"
+              stroke="var(--text-secondary)"
+              strokeOpacity={0.5}
+              strokeWidth={0.75}
+            />
+            <text
+              x={chart.x + chart.w - 46}
+              y={sy(avgRate)}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="var(--text-secondary)"
+              fontSize={11}
+              fontFamily="var(--font-mono, monospace)"
+            >
+              avg {formatPercent(avgRate, 2)}
+            </text>
+          </g>
+        ) : null}
       </svg>
     </div>
   );

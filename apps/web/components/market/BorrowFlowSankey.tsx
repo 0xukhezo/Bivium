@@ -7,11 +7,13 @@ import { formatCompact, formatPercent, truncateAddress } from "@/lib/utils";
 
 // One contribution to a borrow order — the slice of `amount` (loan-token
 // units) that a specific lender fills at their `ratePerSecond` (annual
-// fraction). Independent of any specific offer/orderbook type so the
+// fraction). `ratePerSecondRaw` is the 1e18 fixed-point form needed for
+// on-chain calls. Independent of any specific offer/orderbook type so the
 // component is reusable with whichever source produced the walk.
 export interface BorrowFill {
   lender: string;
   ratePerSecond: number;
+  ratePerSecondRaw: bigint;
   amount: number;
 }
 
