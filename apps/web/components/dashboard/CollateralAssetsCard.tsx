@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { ChainAwareButton } from "@/components/wallet/ChainAwareButton";
@@ -36,6 +36,36 @@ export function CollateralAssetsCard() {
   }, [profile.allowedCollaterals]);
 
   const [draft, setDraft] = useState<Token[]>([]);
+
+  // Mirror the on-chain `persisted` collaterals into the local draft
+  // whenever the persisted snapshot changes. Hash-keyed so:
+  //   - initial load seeds the draft from on-chain reads,
+  //   - background refetches with identical data don't clobber user edits,
+  //   - after a save lands, the refetch returns new values, the hash flips,
+  //     and the draft re-syncs without a manual reset dance.
+  // Sync is paused while a write is in flight to preserve the in-progress
+  // draft.
+  const persistedHash = useMemo(
+    () =>
+      persisted
+        .map((t) => t.address.toLowerCase())
+        .sort()
+        .join("|"),
+    [persisted],
+  );
+  const lastSeededHashRef = useRef<string>("__init__");
+  useEffect(() => {
+    if (profile.allowedCollateralsLoading) return;
+    if (submitting) return;
+    if (lastSeededHashRef.current === persistedHash) return;
+    lastSeededHashRef.current = persistedHash;
+    setDraft(persisted);
+  }, [
+    profile.allowedCollateralsLoading,
+    persistedHash,
+    persisted,
+    submitting,
+  ]);
 
   const toggle = (token: Token) => {
     if (submitting) return;

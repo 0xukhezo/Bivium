@@ -19,8 +19,10 @@ export function BorrowerSummary({ loans }: BorrowerSummaryProps) {
       (acc, l) => acc + l.collateral.usd,
       0,
     );
-    const lowestHf =
-      loans.length === 0 ? null : Math.min(...loans.map((l) => l.healthFactor));
+    const hfValues = loans
+      .map((l) => l.healthFactor)
+      .filter((v): v is number => v !== null);
+    const lowestHf = hfValues.length === 0 ? null : Math.min(...hfValues);
     return { totalDebt, totalCollateral, lowestHf };
   }, [loans]);
 

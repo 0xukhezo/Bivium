@@ -80,6 +80,43 @@ export function LendingAssetsCard() {
 
   const submitting = opIndex >= 0;
 
+  // Mirror the on-chain `persisted` state into the local draft whenever the
+  // persisted snapshot changes. Keyed by a content hash so:
+  //   - initial load seeds the draft from on-chain reads,
+  //   - a background refetch with identical data is a no-op (won't clobber
+  //     in-flight user edits),
+  //   - after a successful save, the refetch returns new values, the hash
+  //     changes, and the draft re-syncs without needing a manual ref dance.
+  // Pause the sync while a save is in flight so the optimistic in-progress
+  // draft survives until the queue finishes.
+  const persistedHash = useMemo(
+    () =>
+      [...persisted]
+        .map(
+          (a) =>
+            `${a.token.address.toLowerCase()}:${a.ratePerSecond.toFixed(10)}`,
+        )
+        .sort()
+        .join("|"),
+    [persisted],
+  );
+  const lastSeededHashRef = useRef<string>("__init__");
+  useEffect(() => {
+    if (ratesQuery.isLoading) return;
+    if (submitting) return;
+    if (lastSeededHashRef.current === persistedHash) return;
+    lastSeededHashRef.current = persistedHash;
+    setDraft(persisted);
+    setRateInputs(
+      Object.fromEntries(
+        persisted.map((a) => [
+          a.token.address.toLowerCase(),
+          (a.ratePerSecond * 100).toFixed(2),
+        ]),
+      ),
+    );
+  }, [ratesQuery.isLoading, persistedHash, persisted, submitting]);
+
   const toggle = (token: Token) => {
     if (submitting) return;
     const key = token.address.toLowerCase();

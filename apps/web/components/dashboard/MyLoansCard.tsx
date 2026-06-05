@@ -33,7 +33,11 @@ function compare(key: SortKey, a: BorrowerLoan, b: BorrowerLoan): number {
     case "rate":
       return a.ratePerSecond - b.ratePerSecond;
     case "health":
-      return a.healthFactor - b.healthFactor;
+      // Null sorts to the end (largest) ascending.
+      return (
+        (a.healthFactor ?? Number.POSITIVE_INFINITY) -
+        (b.healthFactor ?? Number.POSITIVE_INFINITY)
+      );
   }
 }
 
@@ -188,7 +192,8 @@ function AmountCell({
   );
 }
 
-function HealthBadge({ value }: { value: number }) {
+function HealthBadge({ value }: { value: number | null }) {
+  if (value === null) return <Badge variant="neutral">—</Badge>;
   const band = healthBand(value);
   const variant =
     band === "safe" ? "success" : band === "warn" ? "warn" : "danger";

@@ -16,12 +16,14 @@ interface RepayModalProps {
   submitting: boolean;
 }
 
-function hfColor(hf: number): string {
+function hfColor(hf: number | null): string {
+  if (hf === null) return "text-text-muted";
   if (!Number.isFinite(hf) || healthBand(hf) === "safe") return "text-success";
   return healthBand(hf) === "warn" ? "text-warn" : "text-danger";
 }
 
-function formatHf(hf: number): string {
+function formatHf(hf: number | null): string {
+  if (hf === null) return "—";
   return Number.isFinite(hf) ? hf.toFixed(2) : "∞";
 }
 

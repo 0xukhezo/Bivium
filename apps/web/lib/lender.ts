@@ -28,22 +28,24 @@ export interface LenderMarket {
 
 export const AVAILABLE_LEND_ASSETS: Token[] = [
   ARBITRUM_TOKENS.WBTC,
-  ARBITRUM_TOKENS.ETH,
+  ARBITRUM_TOKENS.WETH,
   ARBITRUM_TOKENS.USDC,
+  ARBITRUM_TOKENS.LINK,
 ];
 
 export const AVAILABLE_COLLATERAL_ASSETS: Token[] = [
   ARBITRUM_TOKENS.WBTC,
-  ARBITRUM_TOKENS.ETH,
+  ARBITRUM_TOKENS.WETH,
   ARBITRUM_TOKENS.USDC,
+  ARBITRUM_TOKENS.LINK,
 ];
 
 export const MOCK_LENDER_PREFERENCES: LenderPreferences = {
   lendingAssets: [
     { token: ARBITRUM_TOKENS.USDC, ratePerSecond: 0.05 },
-    { token: ARBITRUM_TOKENS.ETH, ratePerSecond: 0.035 },
+    { token: ARBITRUM_TOKENS.WETH, ratePerSecond: 0.035 },
   ],
-  collateralAssets: [ARBITRUM_TOKENS.WBTC, ARBITRUM_TOKENS.ETH],
+  collateralAssets: [ARBITRUM_TOKENS.WBTC, ARBITRUM_TOKENS.WETH],
 };
 
 const MOCK_LENDER_ADDR =
@@ -64,7 +66,7 @@ export const MOCK_LENDER_MARKETS: LenderMarket[] = [
   },
   {
     id: `0x${"0".repeat(36)}0002`,
-    collateralToken: ARBITRUM_TOKENS.ETH,
+    collateralToken: ARBITRUM_TOKENS.WETH,
     loanToken: ARBITRUM_TOKENS.USDC,
     creator: MOCK_LENDER_ADDR,
     lltv: 0.8,
@@ -77,7 +79,7 @@ export const MOCK_LENDER_MARKETS: LenderMarket[] = [
   {
     id: `0x${"0".repeat(36)}0003`,
     collateralToken: ARBITRUM_TOKENS.WBTC,
-    loanToken: ARBITRUM_TOKENS.ETH,
+    loanToken: ARBITRUM_TOKENS.WETH,
     creator: MOCK_LENDER_ADDR,
     lltv: 0.75,
     ratePerSecond: 0.035,

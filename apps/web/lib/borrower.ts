@@ -16,8 +16,11 @@ export interface BorrowerLoan {
   ratePerSecond: number;
   /** TODO: 1e18 bigint. */
   lltv: number;
-  /** Derived: `(collateral_usd * lltv) / debt_usd`. */
-  healthFactor: number;
+  /**
+   * Derived: `(collateral_usd * lltv) / debt_usd`. `null` when either USD
+   * value is missing (no price feed for that token in the indexer).
+   */
+  healthFactor: number | null;
   lender: string;
 }
 
@@ -48,7 +51,7 @@ export const MOCK_BORROWER_LOANS: BorrowerLoan[] = [
   {
     id: `0x${"0".repeat(36)}b002`,
     marketId: `0x${"0".repeat(36)}b002`,
-    collateralToken: ARBITRUM_TOKENS.ETH,
+    collateralToken: ARBITRUM_TOKENS.WETH,
     loanToken: ARBITRUM_TOKENS.USDC,
     collateral: { amount: 8, usd: 28_000 },
     borrowShares: 15_400 + 95,
@@ -62,7 +65,7 @@ export const MOCK_BORROWER_LOANS: BorrowerLoan[] = [
   {
     id: `0x${"0".repeat(36)}b003`,
     marketId: `0x${"0".repeat(36)}b003`,
-    collateralToken: ARBITRUM_TOKENS.ETH,
+    collateralToken: ARBITRUM_TOKENS.WETH,
     loanToken: ARBITRUM_TOKENS.WBTC,
     collateral: { amount: 5, usd: 17_500 },
     borrowShares: 0.18 + 0.002,

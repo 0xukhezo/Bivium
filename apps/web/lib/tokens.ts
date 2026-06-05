@@ -15,7 +15,10 @@ const TRUSTWALLET_ARB =
 const TRUSTWALLET_ETH =
   "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets";
 
-// "ETH" maps to WETH since native ETH has no ERC-20 address.
+// All entries are ERC-20s on Arbitrum. We use the indexer's symbols verbatim
+// (so the preferences cards match the markets table). Native ETH has no
+// ERC-20 form — wherever a "lending token" or "collateral token" is needed,
+// it's the WETH contract below.
 export const ARBITRUM_TOKENS = {
   WBTC: {
     address: "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f",
@@ -25,10 +28,10 @@ export const ARBITRUM_TOKENS = {
     chainId: arbitrum.id,
     iconUrl: `${TRUSTWALLET_ARB}/0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f/logo.png`,
   },
-  ETH: {
+  WETH: {
     address: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
-    symbol: "ETH",
-    name: "Ether",
+    symbol: "WETH",
+    name: "Wrapped Ether",
     decimals: 18,
     chainId: arbitrum.id,
     iconUrl: `${TRUSTWALLET_ARB}/0x82aF49447D8a07e3bd95BD0d56f35241523fBab1/logo.png`,
@@ -42,7 +45,7 @@ export const ARBITRUM_TOKENS = {
     iconUrl: `${TRUSTWALLET_ARB}/0xaf88d065e77c8cC2239327C5EDb3A432268e5831/logo.png`,
   },
   LINK: {
-    address: "0xf97F4df75117a78c1A5a0DBb814Af92458539FB4",
+    address: "0xf97f4df75117a78c1A5a0DBb814Af92458539FB4",
     symbol: "LINK",
     name: "ChainLink Token",
     decimals: 18,
@@ -62,7 +65,7 @@ export function getTokenByAddress(address: string): Token | undefined {
 const MOCK_PRICES_USD: Record<string, number> = {
   USDC: 1,
   WBTC: 70_000,
-  ETH: 3_500,
+  WETH: 3_500,
   LINK: 8,
 };
 

@@ -12,6 +12,8 @@ import {
 import { MarketStatusModal } from "./MarketStatusModal";
 import { type LenderMarket } from "@/lib/lender";
 import { useSetRate } from "@/hooks/useLenderProfileWrite";
+import { useLenderMarkets } from "@/hooks/useLenderMarkets";
+import { useEmbeddedAddress } from "@/hooks/useEmbeddedAddress";
 import type { Token } from "@/lib/tokens";
 import { formatCompact, formatPercent, formatUsd } from "@/lib/utils";
 import { toast } from "@/lib/toast";
@@ -45,8 +47,10 @@ function compare(key: SortKey, a: LenderMarket, b: LenderMarket): number {
 // Caveat: setRate is per loan token, so two markets sharing a loanToken
 // pause/resume together until a per-pair kill-switch lands on the contract.
 export function MyMarketsCard() {
-  // TODO(lender-markets-endpoint): query `/api/v1/lenders/:address/markets`.
-  const [markets, setMarkets] = useState<LenderMarket[]>([]);
+  const address = useEmbeddedAddress();
+  const query = useLenderMarkets(address);
+  const markets = useMemo(() => query.data ?? [], [query.data]);
+
   const [statusMarket, setStatusMarket] = useState<LenderMarket | null>(null);
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
 
@@ -61,15 +65,12 @@ export function MyMarketsCard() {
   useEffect(() => {
     if (!setRateHook.isSuccess || !pendingId || !pendingNextStatus) return;
     const targetMarket = markets.find((m) => m.id === pendingId);
-    setMarkets((prev) =>
-      prev.map((m) =>
-        m.id === pendingId ? { ...m, status: pendingNextStatus } : m,
-      ),
-    );
     setStatusMarket(null);
     setPendingId(null);
     setPendingNextStatus(null);
     setRateHook.reset();
+    // Refetch so the new pause/active status comes from the indexer.
+    query.refetch();
     if (targetMarket) {
       const pairLabel = `${targetMarket.collateralToken.symbol} / ${targetMarket.loanToken.symbol}`;
       toast.success(
@@ -84,7 +85,7 @@ export function MyMarketsCard() {
         },
       );
     }
-  }, [setRateHook.isSuccess, pendingId, pendingNextStatus, setRateHook, markets]);
+  }, [setRateHook.isSuccess, pendingId, pendingNextStatus, setRateHook, markets, query]);
 
   useEffect(() => {
     if (!setRateHook.error) return;
@@ -128,7 +129,17 @@ export function MyMarketsCard() {
           </p>
         </div>
       </CardHeader>
-      {markets.length === 0 ? (
+      {query.isPending ? (
+        <div className="rounded-md border border-border bg-bg-sunken px-4 py-12 text-center">
+          <p className="text-text-secondary">Loading your markets…</p>
+        </div>
+      ) : query.isError ? (
+        <div className="rounded-md border border-danger/30 bg-danger/10 px-4 py-12 text-center">
+          <p className="text-sm text-text-secondary">
+            Couldn&apos;t load your markets. {humanizeError(query.error)}
+          </p>
+        </div>
+      ) : markets.length === 0 ? (
         <div className="rounded-md border border-border bg-bg-sunken px-4 py-12 text-center">
           <p className="text-text-primary">
             No active markets yet

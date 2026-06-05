@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { MOCK_BORROWER_LOANS, type BorrowerLoan } from "@/lib/borrower";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Card } from "@/components/ui/Card";
+import { type BorrowerLoan } from "@/lib/borrower";
 import { BorrowerSummary } from "./BorrowerSummary";
 import { MyLoansCard } from "./MyLoansCard";
 import { RepayModal } from "./RepayModal";
 import { useRepay, type RepayItem } from "@/hooks/useBiviumRouterWrite";
+import { useBorrowerLoans } from "@/hooks/useBorrowerLoans";
+import { useEmbeddedAddress } from "@/hooks/useEmbeddedAddress";
 import { annualRateToRatePerSecond } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { humanizeError } from "@/lib/errors";
@@ -35,7 +38,10 @@ function buildRepayItem(loan: BorrowerLoan, amount: number): RepayItem {
 }
 
 export function BorrowerView() {
-  const [loans, setLoans] = useState<BorrowerLoan[]>(MOCK_BORROWER_LOANS);
+  const address = useEmbeddedAddress();
+  const query = useBorrowerLoans(address);
+  const loans = useMemo(() => query.data ?? [], [query.data]);
+
   const [repayLoan, setRepayLoan] = useState<BorrowerLoan | null>(null);
   const pendingAmountRef = useRef<number>(0);
 
@@ -64,30 +70,9 @@ export function BorrowerView() {
     const debtAmount = loan.principal.amount + loan.accruedInterest.amount;
     const closing = amount >= debtAmount - 1e-9;
 
-    setLoans((prev) =>
-      prev.flatMap((l) => {
-        if (l.id !== loan.id) return [l];
-        if (closing) return [];
-        const ratio = (debtAmount - amount) / debtAmount;
-        const newDebtUsd =
-          (l.principal.usd + l.accruedInterest.usd) * ratio;
-        return [
-          {
-            ...l,
-            borrowShares: l.borrowShares * ratio,
-            principal: {
-              amount: l.principal.amount * ratio,
-              usd: l.principal.usd * ratio,
-            },
-            accruedInterest: {
-              amount: l.accruedInterest.amount * ratio,
-              usd: l.accruedInterest.usd * ratio,
-            },
-            healthFactor: (l.collateral.usd * l.lltv) / newDebtUsd,
-          },
-        ];
-      }),
-    );
+    // Refetch from indexer instead of optimistic mutation — the indexer is
+    // the source of truth for borrowShares, debtAmount, and healthFactor.
+    query.refetch();
 
     toast.success(
       closing ? `${loan.loanToken.symbol} loan closed` : "Loan repaid",
@@ -101,7 +86,7 @@ export function BorrowerView() {
     setRepayLoan(null);
     pendingAmountRef.current = 0;
     repayHook.reset();
-  }, [repayHook.isSuccess, repayLoan, repayHook]);
+  }, [repayHook.isSuccess, repayLoan, repayHook, query]);
 
   useEffect(() => {
     if (!repayHook.error) return;
@@ -111,6 +96,23 @@ export function BorrowerView() {
     });
     repayHook.reset();
   }, [repayHook.error, repayHook]);
+
+  if (query.isPending) {
+    return (
+      <Card className="flex items-center justify-center py-16">
+        <p className="text-text-secondary">Loading your loans…</p>
+      </Card>
+    );
+  }
+  if (query.isError) {
+    return (
+      <Card className="flex items-center justify-center border-danger/30 bg-danger/10 py-16">
+        <p className="text-sm text-text-secondary">
+          Couldn&apos;t load your loans. {humanizeError(query.error)}
+        </p>
+      </Card>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
