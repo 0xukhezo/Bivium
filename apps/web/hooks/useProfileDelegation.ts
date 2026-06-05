@@ -4,47 +4,58 @@ import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAccount, usePublicClient } from "wagmi";
 import { CONTRACT_ADDRESSES } from "@/lib/contracts/addresses";
+import { useEmbeddedAddress } from "./useEmbeddedAddress";
 
+// EIP-7702 designator prefix: getCode returns `0xef0100 || <20-byte target>`.
 const DELEGATION_PREFIX = "0xef0100";
 
-/**
- * Reads the EIP-7702 delegation status of the connected wallet.
- *
- * After a successful 7702 set-code tx, `eth_getCode` for the EOA returns a
- * 23-byte designator: `0xef0100 || <20-byte target address>`. We probe that
- * shape and compare the target to our BiviumProfile template.
- */
 export function useProfileDelegation() {
-  const { address, isConnected } = useAccount();
+  const { isConnected } = useAccount();
+  const address = useEmbeddedAddress();
   const publicClient = usePublicClient();
   const queryClient = useQueryClient();
   const profileAddress = CONTRACT_ADDRESSES.profile;
 
   const queryKey = ["7702-delegation", address ?? "no-account"] as const;
 
-  const { data, isLoading, isFetching, error } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey,
     queryFn: async () => {
-      if (!publicClient || !address) return null;
-      const code = await publicClient.getCode({ address });
-      if (!code || code === "0x") return null;
-      if (!code.toLowerCase().startsWith(DELEGATION_PREFIX)) return null;
-      // Strip the 3-byte prefix to get the 20-byte target address (40 hex chars).
+      if (!publicClient || !address) return { code: null, target: null };
+      const code = (await publicClient.getCode({ address })) ?? "0x";
+      if (typeof window !== "undefined") {
+        console.log("[delegation] address", address, "code", code);
+      }
+      if (!code || code === "0x")
+        return { code, target: null as `0x${string}` | null };
+      if (!code.toLowerCase().startsWith(DELEGATION_PREFIX))
+        return { code, target: null as `0x${string}` | null };
       const target = `0x${code.slice(DELEGATION_PREFIX.length)}` as `0x${string}`;
-      return target.toLowerCase() as `0x${string}`;
+      return {
+        code,
+        target: target.toLowerCase() as `0x${string}`,
+      };
     },
     enabled: Boolean(publicClient && address),
-    staleTime: 15_000, // re-poll only on demand (tx success) — chain reads are cheap but we throttle anyway
+    staleTime: 60_000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
-  const delegatedTo = data ?? null;
+  const rawCode = data?.code ?? null;
+  const delegatedTo = data?.target ?? null;
   const isDelegated =
     !!delegatedTo &&
     !!profileAddress &&
     delegatedTo === profileAddress.toLowerCase();
 
+  // We know the answer when either (a) the query has produced data, or
+  // (b) we don't have an address yet (nothing to check). `isLoading` alone
+  // is misleading: it stays `false` while the query is disabled.
+  const isResolved = data !== undefined || !address;
+
   const refetch = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey });
+    queryClient.refetchQueries({ queryKey, exact: true });
   }, [queryClient, queryKey]);
 
   return {
@@ -53,7 +64,9 @@ export function useProfileDelegation() {
     profileAddress,
     isDelegated,
     delegatedTo,
-    isLoading: isLoading || isFetching,
+    rawCode,
+    isLoading,
+    isResolved,
     error,
     refetch,
   };

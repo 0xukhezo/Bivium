@@ -1,16 +1,8 @@
-// Minimal hand-extracted ABI for the BiviumProfile (ERC-7702 delegate).
-//
-// Source of truth: apps/contracts/src/BiviumProfile.sol. Because each lender's
-// EOA delegates to this template via ERC-7702, the contract address used for
-// these calls is the lender's OWN connected address — not a single deployed
-// instance. Only the function selectors / shape matter here.
-//
-// Replace with the forge-extracted artifact once `apps/contracts/out/` is
-// generated (`forge build`) and the indexer's `regen-abis` script is updated
-// to include BiviumProfile.
+// Source of truth: apps/contracts/src/BiviumProfile.sol. The contract address
+// used for these calls is the lender's OWN EOA (ERC-7702 delegation), not a
+// single deployed instance.
 
 export const BiviumProfileAbi = [
-  // --- writes (all `onlySelf` — call via the lender's own EOA) ---
   {
     type: "function",
     name: "setRate",
@@ -57,7 +49,6 @@ export const BiviumProfileAbi = [
     outputs: [],
   },
 
-  // --- reads ---
   {
     type: "function",
     name: "paused",

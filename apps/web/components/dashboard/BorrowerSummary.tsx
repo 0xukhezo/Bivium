@@ -11,8 +11,6 @@ interface BorrowerSummaryProps {
 
 export function BorrowerSummary({ loans }: BorrowerSummaryProps) {
   const stats = useMemo(() => {
-    // Local name (`totalDebt`) avoids colliding with the schema's old
-    // `Market.totalBorrowed` field name we've migrated away from.
     const totalDebt = loans.reduce(
       (acc, l) => acc + l.principal.usd + l.accruedInterest.usd,
       0,

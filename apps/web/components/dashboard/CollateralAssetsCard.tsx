@@ -1,17 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import {
-  AVAILABLE_COLLATERAL_ASSETS,
-  MOCK_LENDER_PREFERENCES,
-} from "@/lib/lender";
+import { ChainAwareButton } from "@/components/wallet/ChainAwareButton";
+import { AVAILABLE_COLLATERAL_ASSETS } from "@/lib/lender";
 import { useSetAllowedCollaterals } from "@/hooks/useLenderProfileWrite";
+import { useLenderProfile } from "@/hooks/useLenderProfile";
 import type { Token } from "@/lib/tokens";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { humanizeError } from "@/lib/errors";
 
 function sameAddress(a: string, b: string) {
   return a.toLowerCase() === b.toLowerCase();
@@ -22,18 +21,21 @@ function hasDiff(a: Token[], b: Token[]): boolean {
   return !a.every((aa) => b.some((bb) => sameAddress(aa.address, bb.address)));
 }
 
-/**
- * Saves the accepted-collateral list with a single bulk
- * BiviumProfile.setAllowedCollaterals(addresses[]) call — one wallet prompt,
- * one tx, the whole list replaced atomically. */
 export function CollateralAssetsCard() {
-  const [persisted, setPersisted] = useState<Token[]>(
-    MOCK_LENDER_PREFERENCES.collateralAssets,
-  );
-  const [draft, setDraft] = useState<Token[]>(persisted);
-
   const writeHook = useSetAllowedCollaterals();
   const submitting = writeHook.isPending || writeHook.isConfirming;
+
+  const profile = useLenderProfile();
+  const persisted = useMemo<Token[]>(() => {
+    const lowered = new Set(
+      profile.allowedCollaterals.map((a) => a.toLowerCase()),
+    );
+    return AVAILABLE_COLLATERAL_ASSETS.filter((t) =>
+      lowered.has(t.address.toLowerCase()),
+    );
+  }, [profile.allowedCollaterals]);
+
+  const [draft, setDraft] = useState<Token[]>([]);
 
   const toggle = (token: Token) => {
     if (submitting) return;
@@ -52,10 +54,9 @@ export function CollateralAssetsCard() {
     writeHook.setAllowedCollaterals(draft.map((t) => t.address));
   };
 
-  // Commit draft → persisted once the bulk tx confirms.
   useEffect(() => {
     if (!writeHook.isSuccess) return;
-    setPersisted(draft);
+    profile.refetch();
     writeHook.reset();
     toast.success("Accepted collateral updated", {
       description:
@@ -66,11 +67,10 @@ export function CollateralAssetsCard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [writeHook.isSuccess]);
 
-  // Surface errors as toasts (wallet rejection, revert).
   useEffect(() => {
     if (!writeHook.error) return;
     toast.error("Save failed", {
-      description: readableWriteError(writeHook.error),
+      description: humanizeError(writeHook.error),
     });
     writeHook.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -146,20 +146,16 @@ export function CollateralAssetsCard() {
               ? "Saving requires 1 transaction."
               : "No unsaved changes."}
         </p>
-        <Button
+        <ChainAwareButton
           variant="primary"
           size="md"
           onClick={save}
           disabled={!dirty || submitting}
         >
           {submitting ? "Confirming…" : "Save preferences"}
-        </Button>
+        </ChainAwareButton>
       </div>
     </Card>
   );
 }
 
-function readableWriteError(err: Error): string {
-  const anyErr = err as Error & { shortMessage?: string };
-  return anyErr.shortMessage ?? err.message;
-}

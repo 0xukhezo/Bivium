@@ -1,35 +1,42 @@
 "use client";
 
 import { useState } from "react";
-import { useAccount } from "wagmi";
+import { usePrivy } from "@privy-io/react-auth";
 import { Card } from "@/components/ui/Card";
 import { LogoMark } from "@/components/layout/Logo";
 import { ConnectButton } from "@/components/wallet/ConnectButton";
-import { useMounted } from "@/hooks/useMounted";
 import { MyMarketsCard } from "./MyMarketsCard";
 import { LendingAssetsCard } from "./LendingAssetsCard";
 import { CollateralAssetsCard } from "./CollateralAssetsCard";
 import { BorrowerView } from "./BorrowerView";
 import { ActivateProfileCard } from "./ActivateProfileCard";
+import { DashboardSkeleton } from "./DashboardSkeleton";
 import { useProfileDelegation } from "@/hooks/useProfileDelegation";
 import { cn } from "@/lib/utils";
 
 type View = "lender" | "borrower";
 
 export function DashboardView() {
-  const mounted = useMounted();
-  const { isConnected } = useAccount();
+  const { ready, authenticated } = usePrivy();
   const [view, setView] = useState<View>("lender");
-  const { isDelegated, profileAddress } = useProfileDelegation();
+  const { isDelegated, isResolved, profileAddress } = useProfileDelegation();
 
-  // Gate behind a real connection; the mounted guard keeps SSR and the first
-  // client render in sync (both show the prompt) to avoid hydration mismatch.
-  const connected = mounted && isConnected;
-  // Lender content is only meaningful once the EOA delegates to the Profile.
-  // When the template address isn't configured we fall through to the regular
-  // lender content so dev can still iterate locally without 7702 set up.
+  // Loading: Privy SDK still booting, or user is authenticated but the
+  // delegation lookup hasn't resolved yet (also covers "embedded wallet
+  // address not yet surfaced"). We gate every dashboard branch on this to
+  // prevent flashing sign-in → activate → lender on refresh.
+  const isLoading =
+    !ready || (authenticated && view === "lender" && !isResolved);
+
+  const connected = ready && authenticated;
   const needsActivation =
-    connected && view === "lender" && !!profileAddress && !isDelegated;
+    connected &&
+    view === "lender" &&
+    !!profileAddress &&
+    isResolved &&
+    !isDelegated;
+  const missingProfileConfig =
+    connected && view === "lender" && !profileAddress;
 
   return (
     <>
@@ -37,24 +44,26 @@ export function DashboardView() {
         <h1 className="text-3xl font-semibold text-text-primary">Dashboard</h1>
         <h2 className="mt-2 max-w-2xl text-text-secondary">
           {!connected
-            ? "Connect your wallet to manage your markets, lending preferences, and loans."
+            ? "Sign in to manage your markets, lending preferences, and loans."
             : view === "lender"
               ? "Manage what you lend, what you accept as collateral, and the markets you've created."
               : "Track your loans, monitor health factors, and repay positions."}
         </h2>
       </header>
 
-      {!connected ? (
+      {isLoading ? (
+        <DashboardSkeleton />
+      ) : !connected ? (
         <Card className="flex flex-col items-center justify-center gap-5 py-16 text-center">
           <div className="grid h-16 w-16 place-items-center rounded-full bg-bg-sunken">
             <LogoMark size={32} />
           </div>
           <div>
             <h3 className="text-lg font-semibold text-text-primary">
-              Please connect your wallet
+              Sign in to continue
             </h3>
             <p className="mx-auto mt-1 max-w-sm text-sm text-text-secondary">
-              Connect your wallet to see your markets, lending preferences, and
+              Sign in with email, a social account, or an existing wallet to see your markets, lending preferences, and
               open loans.
             </p>
           </div>
@@ -82,7 +91,19 @@ export function DashboardView() {
           </div>
 
           {view === "lender" ? (
-            needsActivation ? (
+            missingProfileConfig ? (
+              <Card className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+                <h3 className="text-lg font-semibold text-text-primary">
+                  Profile template not configured
+                </h3>
+                <p className="mx-auto max-w-md text-sm text-text-secondary">
+                  Set <span className="font-mono">NEXT_PUBLIC_BIVIUM_PROFILE_ADDRESS</span>{" "}
+                  in <span className="font-mono">.env.local</span> to the
+                  deployed BiviumProfile template, then refresh to start the
+                  EIP-7702 activation flow.
+                </p>
+              </Card>
+            ) : needsActivation ? (
               <ActivateProfileCard />
             ) : (
               <div className="flex flex-col gap-6">

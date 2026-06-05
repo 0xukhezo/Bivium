@@ -25,8 +25,6 @@ export function formatTokenAmount(value: number, opts: { decimals?: number; comp
   }).format(value);
 }
 
-// Below 100,000 we want the full number with 2 decimals so amounts like a
-// 16,448 USDC debt read clearly; only at/above 100k do we switch to K/M/B.
 export function formatCompact(value: number): string {
   if (Math.abs(value) >= 100_000) {
     return new Intl.NumberFormat("en-US", {
@@ -48,9 +46,8 @@ export function formatPercent(value: number, decimals = 2): string {
   return `${(value * 100).toFixed(decimals)}%`;
 }
 
-const SECONDS_PER_YEAR = 365 * 24 * 60 * 60; // 31,536,000
+const SECONDS_PER_YEAR = 365 * 24 * 60 * 60;
 
-/** Annualized rate (0–1, e.g. 0.05 = 5%) → ratePerSecond as 1e18 fixed point. */
 export function annualRateToRatePerSecond(annualRate: number): bigint {
   if (annualRate < 0 || !Number.isFinite(annualRate)) return 0n;
   const scaled = Math.round((annualRate * 1e18) / SECONDS_PER_YEAR);

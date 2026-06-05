@@ -4,8 +4,6 @@ import { SectionEyebrow } from "./SectionEyebrow";
 export function CtaBand() {
   return (
     <section className="bg-blueprint relative overflow-hidden">
-      {/* Feather the top edge so the blueprint texture fades in from the
-          previous section rather than cutting in with a hard line. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-bg to-transparent"

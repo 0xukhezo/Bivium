@@ -1,44 +1,26 @@
 import { ARBITRUM_TOKENS, type Token } from "./tokens";
 
-/**
- * A borrower's open position in a market. Field names mirror `positions`
- * + the joined `markets` row in `apps/indexer/ponder.schema.ts`.
- *
- * Today's split into `principal` + `accruedInterest` is a UI affordance only —
- * the indexer stores `borrowShares` and the market totals; debt is derived as
- * `borrowShares × totalBorrowAssets / totalBorrowShares`. Tomorrow we delete
- * the split and read from `borrowShares + marketId` exclusively. The seam is
- * already in place via the new `borrowShares` and `marketId` fields below.
- */
 export interface BorrowerLoan {
   id: string;
-  /** PK component on `positions(marketId, borrower)`. */
   marketId: `0x${string}`;
   collateralToken: Token;
   loanToken: Token;
-  /** Matches `positions.collateral`. */
   collateral: { amount: number; usd: number };
-  /**
-   * TODO: tomorrow this becomes the source of truth (number → bigint, and
-   * `principal + accruedInterest` are removed in favor of
-   * `borrowShares × totalBorrowAssets / totalBorrowShares`).
-   */
+  /** TODO: source of truth once indexer is wired. */
   borrowShares: number;
-  /** TODO: delete tomorrow; folded into `borrowShares` math. */
+  /** TODO: delete once `borrowShares × totalBorrowAssets / totalBorrowShares` math lands. */
   principal: { amount: number; usd: number };
-  /** TODO: delete tomorrow; folded into `borrowShares` math. */
+  /** TODO: delete; folded into `borrowShares` math. */
   accruedInterest: { amount: number; usd: number };
-  /** TODO: 1e18 bigint per-second tomorrow. */
+  /** TODO: 1e18 bigint per-second. */
   ratePerSecond: number;
-  /** TODO: 1e18 bigint tomorrow. */
+  /** TODO: 1e18 bigint. */
   lltv: number;
-  /** Derived: `(collateral_usd * lltv) / debt_usd`. Live oracle tomorrow. */
+  /** Derived: `(collateral_usd * lltv) / debt_usd`. */
   healthFactor: number;
-  /** Joins via `markets.creator` tomorrow. */
   lender: string;
 }
 
-// Health factor thresholds used across the borrower views.
 export const HF_SAFE = 1.5;
 export const HF_WARN = 1.2;
 
@@ -55,8 +37,6 @@ export const MOCK_BORROWER_LOANS: BorrowerLoan[] = [
     collateralToken: ARBITRUM_TOKENS.WBTC,
     loanToken: ARBITRUM_TOKENS.USDC,
     collateral: { amount: 0.5, usd: 35_000 },
-    // Seeded so debt-from-shares == principal + interest under the mock 1:1
-    // shares↔assets ratio used by MOCK_MARKETS.
     borrowShares: 16_200 + 248,
     principal: { amount: 16_200, usd: 16_200 },
     accruedInterest: { amount: 248, usd: 248 },

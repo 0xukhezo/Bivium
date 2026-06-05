@@ -3,9 +3,6 @@ import { Inter, Manrope, JetBrains_Mono } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
 
-// Inter for body, Manrope for display headings, JetBrains Mono for code +
-// tabular numerals. All three are scoped to CSS variables so we can keep
-// switching pieces without re-importing per-file.
 const inter = Inter({
   subsets: ["latin"],
   display: "swap",

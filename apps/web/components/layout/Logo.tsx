@@ -8,9 +8,6 @@ export function LogoMark({
 }: {
   size?: number;
   className?: string;
-  /** "primary" uses currentColor for the dark blades — picks up text color
-   *  from the enclosing element. "white" forces white blades for use on
-   *  saturated backgrounds. */
   tone?: "primary" | "white";
 }) {
   const ink = tone === "white" ? "#ffffff" : "currentColor";

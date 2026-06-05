@@ -51,9 +51,6 @@ export function MarketTable() {
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
   const [page, setPage] = useState(1);
 
-  // Live markets from /api/v1/markets. Loading / error / empty are rendered
-  // inline below so the filter chrome stays present (lets the user retry from
-  // the same toolbar position).
   const marketsQuery = useMarkets();
   const markets = useMemo(() => marketsQuery.data ?? [], [marketsQuery.data]);
 
@@ -296,8 +293,6 @@ function TokenCell({ token }: { token: Token }) {
   );
 }
 
-/** Pulse-skeleton rows that mirror the real table layout so the swap to
- *  loaded data doesn't shift the page. */
 function SkeletonTable({ rows }: { rows: number }) {
   return (
     <div className="overflow-hidden rounded-md border border-border">

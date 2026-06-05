@@ -5,12 +5,11 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOut, Menu, Moon, Sun, X } from "lucide-react";
-import { useAccount, useDisconnect, useEnsName } from "wagmi";
-import { mainnet } from "wagmi/chains";
+import { usePrivy } from "@privy-io/react-auth";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
-import { ConnectModal } from "@/components/wallet/ConnectModal";
+import { useEmbeddedAddress } from "@/hooks/useEmbeddedAddress";
 import { useMounted } from "@/hooks/useMounted";
 import { Logo } from "./Logo";
 import { cn, truncateAddress } from "@/lib/utils";
@@ -27,16 +26,11 @@ const NAV_ITEMS = [
 
 export function MobileDrawer({ open, onClose }: MobileDrawerProps) {
   const [mounted, setMounted] = useState(false);
-  const [connectOpen, setConnectOpen] = useState(false);
   const pathname = usePathname();
   const walletMounted = useMounted();
-  const { address, isConnected } = useAccount();
-  const { disconnect } = useDisconnect();
-  const { data: ensName } = useEnsName({
-    address,
-    chainId: mainnet.id,
-    query: { enabled: Boolean(address) },
-  });
+  const { ready, authenticated, login, logout } = usePrivy();
+  const address = useEmbeddedAddress();
+  const isConnected = authenticated && !!address;
   const { resolvedTheme, setTheme } = useTheme();
 
   useEffect(() => {
@@ -133,17 +127,20 @@ export function MobileDrawer({ open, onClose }: MobileDrawerProps) {
                 className="h-2 w-2 rounded-full bg-success"
                 aria-hidden="true"
               />
-              {ensName ?? truncateAddress(address)}
+              {truncateAddress(address)}
             </span>
           ) : (
             <Button
               variant="primary"
               size="md"
               className="w-full"
-              onClick={() => setConnectOpen(true)}
-              disabled={!walletMounted}
+              onClick={() => {
+                login();
+                onClose();
+              }}
+              disabled={!walletMounted || !ready}
             >
-              Connect Wallet
+              Sign in
             </Button>
           )}
 
@@ -161,27 +158,22 @@ export function MobileDrawer({ open, onClose }: MobileDrawerProps) {
               )}
               <span>{isDark ? "Light mode" : "Dark mode"}</span>
             </button>
-            {walletMounted && isConnected ? (
+            {walletMounted && authenticated ? (
               <button
                 type="button"
                 onClick={() => {
-                  disconnect();
+                  logout();
                   onClose();
                 }}
                 className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-bg text-sm font-medium text-text-secondary transition-colors duration-base ease-out-expo hover:border-danger hover:text-danger"
               >
                 <LogOut size={16} aria-hidden="true" />
-                <span>Disconnect</span>
+                <span>Sign out</span>
               </button>
             ) : null}
           </div>
         </div>
       </aside>
-
-      <ConnectModal
-        open={connectOpen}
-        onClose={() => setConnectOpen(false)}
-      />
     </div>,
     document.body,
   );

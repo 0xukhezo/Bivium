@@ -17,7 +17,6 @@ export function ThemeToggle() {
       aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
       onClick={() => setTheme(isDark ? "light" : "dark")}
     >
-      {/* Render both icons identically until mounted to avoid SSR flicker */}
       {mounted ? (
         isDark ? <Sun size={18} /> : <Moon size={18} />
       ) : (

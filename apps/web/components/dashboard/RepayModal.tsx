@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { TriangleAlert } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
-import { Button } from "@/components/ui/Button";
+import { ChainAwareButton } from "@/components/wallet/ChainAwareButton";
 import { healthBand, type BorrowerLoan } from "@/lib/borrower";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
 import { formatCompact, formatUsd } from "@/lib/utils";
@@ -12,10 +12,7 @@ interface RepayModalProps {
   loan: BorrowerLoan | null;
   open: boolean;
   onClose: () => void;
-  /** Fire-and-forget — parent owns the tx state and decides when to close. */
   onConfirm: (amount: number) => void;
-  /** Parent-owned submitting state. While true the modal is non-dismissable
-   *  and the confirm button shows "Confirming…". */
   submitting: boolean;
 }
 
@@ -54,7 +51,6 @@ export function RepayModal({
   const pricePerToken = debtAmount > 0 ? debtUsd / debtAmount : 0;
 
   const parsed = parseFloat(amountInput);
-  // Can't repay more than is owed; balance shortfall is flagged separately.
   const amount = Number.isNaN(parsed)
     ? 0
     : Math.min(Math.max(parsed, 0), debtAmount);
@@ -71,8 +67,6 @@ export function RepayModal({
 
   const valid = amount > 0 && !exceedsBalance;
 
-  // Heads-up whenever the repayment leaves a remaining position: either the
-  // wallet can't cover the full debt, or the user chose a partial amount.
   const balanceKnown = isConnected && !balanceLoading;
   const insufficientForFull = balanceKnown && walletBalance < debtAmount - 1e-9;
   const isPartial = amount > 0 && amount < debtAmount - 1e-9;
@@ -85,15 +79,12 @@ export function RepayModal({
   const setAmount = (value: number) =>
     setAmountInput(String(Math.round(value * 1e8) / 1e8));
 
-  // Most you can repay from the wallet = smaller of balance or debt.
   const handleMaxWallet = () => setAmount(Math.min(walletBalance, debtAmount));
-  // Full debt — may exceed balance, which the button state then flags.
   const handleMaxDebt = () => setAmount(debtAmount);
 
   const handleConfirm = () => {
     if (!valid || submitting) return;
     onConfirm(amount);
-    // Parent closes the modal once the tx confirms / errors.
   };
 
   return (
@@ -202,7 +193,7 @@ export function RepayModal({
         </div>
       </div>
 
-      <Button
+      <ChainAwareButton
         variant="primary"
         size="lg"
         className="mt-6 w-full"
@@ -216,7 +207,7 @@ export function RepayModal({
             : exceedsBalance
               ? "Insufficient balance"
               : `Repay ${loan.loanToken.symbol}`}
-      </Button>
+      </ChainAwareButton>
     </Modal>
   );
 }

@@ -64,14 +64,12 @@ export function FeatureGrid() {
           </p>
         </div>
 
-        {/* Hairline grid — no card walls. Subtle dividers describe the lattice. */}
         <div className="mt-14 grid grid-cols-1 border-t border-border md:grid-cols-2 lg:grid-cols-3">
           {features.map((f, i) => (
             <article
               key={f.n}
               className={[
                 "group relative flex flex-col gap-3 border-b border-border p-7 transition-colors duration-base ease-out-expo hover:bg-bg-elevated/50",
-                // Vertical dividers, but only inside the row (not on the trailing edge).
                 "md:border-r",
                 i % 2 === 1 ? "md:border-r-0 lg:border-r" : "",
                 (i + 1) % 3 === 0 ? "lg:border-r-0" : "lg:border-r",

@@ -68,7 +68,6 @@ export function SortableHeader<K extends string>({
   );
 }
 
-// Cycle: unsorted -> asc -> desc -> unsorted. Different column resets to asc.
 export function nextSort<K extends string>(
   prev: SortState<K> | null,
   key: K,

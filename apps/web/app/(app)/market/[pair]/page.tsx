@@ -180,8 +180,7 @@ function StatRow({
   );
 }
 
-// Subtle area-chart-shaped placeholder — accent-tinted gradient under a
-// smooth curve. Swap for a real chart once historical data lands.
+// TODO: replace with real chart from historical-data endpoint.
 function ChartPlaceholder() {
   return (
     <div className="relative h-72 overflow-hidden rounded-md border border-border bg-bg-sunken">

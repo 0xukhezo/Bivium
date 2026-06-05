@@ -31,7 +31,6 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
   const [slippageInput, setSlippageInput] = useState(SLIPPAGE_DEFAULT);
   const [submitting, setSubmitting] = useState(false);
 
-  // Reset state every time the modal opens for a fresh borrow flow.
   useEffect(() => {
     if (open) {
       setAmountInput("");
@@ -52,8 +51,6 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
   );
 
   const requested = parseFloat(amountInput);
-  // Hard-cap to the order book's total available — the user can't borrow
-  // more than the makers can offer.
   const requestedSafe =
     Number.isFinite(requested) && requested > 0
       ? Math.min(requested, totalAvailable)
@@ -92,8 +89,7 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
   const submit = async () => {
     if (!valid) return;
     setSubmitting(true);
-    // Mock blockchain tx — replace with wagmi writeContract on BiviumRouter.borrow
-    // once NEXT_PUBLIC_BIVIUM_ROUTER_ADDRESS is set. See hooks/useBiviumRouterWrite.ts.
+    // TODO: wire BiviumRouter.borrow via useBiviumRouterWrite.
     await new Promise((r) => setTimeout(r, 1400));
     setSubmitting(false);
     onClose();
@@ -111,7 +107,6 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
         The router walks the order book top-down to fill your size.
       </p>
 
-      {/* Amount */}
       <div className="mt-5">
         <div className="mb-2 flex items-baseline justify-between gap-2">
           <label className="text-sm text-text-secondary">Borrow amount</label>
@@ -130,8 +125,6 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
                 const v = e.target.value;
                 if (v !== "" && !/^\d*\.?\d*$/.test(v)) return;
                 const parsed = parseFloat(v);
-                // Hard-cap the displayed value at totalAvailable — typing past
-                // it snaps the input to the max instead of letting it grow.
                 if (
                   Number.isFinite(parsed) &&
                   parsed > totalAvailable &&
@@ -178,7 +171,6 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
         </div>
       </div>
 
-      {/* HF slider + slippage input — two-column on sm+ */}
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
           <div className="mb-2 flex items-baseline justify-between gap-2">
@@ -236,7 +228,6 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
         </div>
       </div>
 
-      {/* Sankey + alerts */}
       {walk.fills.length > 0 ? (
         <div className="mt-5">
           <div className="mb-2 flex items-baseline justify-between gap-2">
@@ -261,7 +252,6 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
         </Alert>
       ) : null}
 
-      {/* Summary */}
       <div className="mt-5 rounded-md border border-border bg-bg px-3 py-3 text-sm">
         <SummaryRow
           label="Required collateral"

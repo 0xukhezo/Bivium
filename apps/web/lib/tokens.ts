@@ -15,13 +15,7 @@ const TRUSTWALLET_ARB =
 const TRUSTWALLET_ETH =
   "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets";
 
-// Arbitrum One canonical addresses. "ETH" maps to WETH since native ETH has no
-// ERC-20 address — borrowing/lending flows always touch the wrapped contract.
-//
-// Note on icon CDNs: TrustWallet hosts most tokens under their canonical
-// chain. For tokens that don't have an Arbitrum-folder logo (LINK in
-// particular) we fall back to the Ethereum-folder logo of the same brand —
-// the image is identical and resolves with 200.
+// "ETH" maps to WETH since native ETH has no ERC-20 address.
 export const ARBITRUM_TOKENS = {
   WBTC: {
     address: "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f",
@@ -53,8 +47,7 @@ export const ARBITRUM_TOKENS = {
     name: "ChainLink Token",
     decimals: 18,
     chainId: arbitrum.id,
-    // TrustWallet's Arbitrum folder doesn't have a LINK logo — use the
-    // Ethereum-folder asset of the same brand.
+    // TrustWallet's Arbitrum folder lacks a LINK logo; fall back to Ethereum.
     iconUrl: `${TRUSTWALLET_ETH}/0x514910771AF9Ca656af840dff83E8264EcF986CA/logo.png`,
   },
 } as const satisfies Record<string, Token>;
@@ -66,8 +59,6 @@ export function getTokenByAddress(address: string): Token | undefined {
   return SUPPORTED_TOKENS.find((t) => t.address.toLowerCase() === needle);
 }
 
-// Placeholder prices used to drive USD math while oracle reads aren't wired.
-// Keyed by symbol because the mock data flows through symbol checks already.
 const MOCK_PRICES_USD: Record<string, number> = {
   USDC: 1,
   WBTC: 70_000,

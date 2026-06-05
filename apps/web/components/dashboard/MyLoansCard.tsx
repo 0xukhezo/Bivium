@@ -14,10 +14,7 @@ import { formatCompact, formatPercent, formatUsd } from "@/lib/utils";
 
 interface MyLoansCardProps {
   loans: BorrowerLoan[];
-  /** Fire when the user clicks a row's Repay button. Parent owns the modal +
-   *  the tx lifecycle. */
   onSelectRepay: (loan: BorrowerLoan) => void;
-  /** When true the row Repay buttons are disabled — a repay tx is in flight. */
   submitting: boolean;
 }
 

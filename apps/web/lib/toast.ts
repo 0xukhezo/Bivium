@@ -1,13 +1,3 @@
-/**
- * Toast notifications — singleton pub/sub store.
- *
- * The store lives outside React so any call site can fire a toast:
- *   - React components: `toast.success("Saved")`
- *   - Hook callbacks: `useEffect(() => { if (isSuccess) toast.success(...) })`
- *   - Plain TS modules: `import { toast } from "@/lib/toast"`
- *
- * <Toaster /> mounts once near the root and subscribes to the store. */
-
 export type ToastVariant = "success" | "error" | "warn" | "info";
 
 export interface ToastAction {
@@ -20,12 +10,9 @@ export interface Toast {
   variant: ToastVariant;
   title: string;
   description?: string;
-  /** Auto-dismiss after `duration` ms. Pass `null` to keep until the user
-   *  dismisses it manually. Default 4500 ms. */
+  /** Auto-dismiss after `duration` ms; null keeps the toast until dismissed. */
   duration: number | null;
   action?: ToastAction;
-  /** Wall-clock creation timestamp — used by the renderer for stable sort
-   *  even if React re-orders identical-id toasts during a transition. */
   createdAt: number;
 }
 
@@ -71,7 +58,6 @@ export function dismissAll(): void {
 
 interface PushOptions {
   description?: string;
-  /** Set to null to disable auto-dismiss. */
   duration?: number | null;
   action?: ToastAction;
 }

@@ -11,12 +11,8 @@ interface BorrowFlowSankeyProps {
   loanToken: Token;
 }
 
-/**
- * Reversed two-tier Sankey: lender nodes on the LEFT pouring into the
- * connected wallet (or "You") on the RIGHT. Per-flow rate badges are rendered
- * as an HTML overlay on top of the Sankey because @nivo/sankey@0.88's `layers`
- * prop only accepts the four built-in IDs — no custom React layers.
- */
+// Rate badges are an HTML overlay because @nivo/sankey@0.88's `layers` prop
+// only accepts built-in IDs — no custom React layers.
 export function BorrowFlowSankey({ fills, loanToken }: BorrowFlowSankeyProps) {
   const { address } = useAccount();
   const youLabel = address ? truncateAddress(address) : "You";
@@ -38,29 +34,25 @@ export function BorrowFlowSankey({ fills, loanToken }: BorrowFlowSankeyProps) {
     })),
   };
 
-  // Source-id → rate for the link tooltip.
   const ratesByLender = new Map(
     fills.map((f) => [f.offer.lender, f.offer.ratePerSecond]),
   );
 
-  // Per-fill vertical position = the SOURCE node's slice center. With one
-  // target node, every link curves to the same y=50%, so the link midpoints
-  // bunch near 50% — using sourceCenter spreads the badges across the full
-  // chart so each one sits over its own line.
-  // Container is h-56 (224px); Sankey margins are top:8, bottom:8.
+  // Anchor badges to source-node centers; link midpoints all sit at y=50%
+  // with a single target node.
   const total = fills.reduce((sum, f) => sum + f.amount, 0);
   let cumulative = 0;
   const ratePositions = fills.map((f) => {
     const start = cumulative / total;
     const end = (cumulative + f.amount) / total;
     cumulative += f.amount;
-    const sourceCenter = (start + end) / 2; // 0..1 within inner area
+    const sourceCenter = (start + end) / 2;
     const yPx = 8 + sourceCenter * 208;
     return { rate: f.offer.ratePerSecond, yPx };
   });
 
-  // `link` shape comes from nivo at runtime; typing it strictly here would
-  // pull half of @nivo/sankey's internals — `any` is the pragmatic choice.
+  // nivo's runtime link shape isn't exported; typing strictly here would
+  // pull half of @nivo/sankey's internals.
   const LinkTooltip = ({ link }: { link: any }) => {
     const sourceId =
       typeof link.source === "string" ? link.source : link.source?.id;

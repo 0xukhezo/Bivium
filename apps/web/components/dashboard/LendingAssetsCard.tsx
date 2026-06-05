@@ -3,16 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import {
-  AVAILABLE_LEND_ASSETS,
-  MOCK_LENDER_PREFERENCES,
-  type LendingAsset,
-} from "@/lib/lender";
+import { ChainAwareButton } from "@/components/wallet/ChainAwareButton";
+import { AVAILABLE_LEND_ASSETS, type LendingAsset } from "@/lib/lender";
 import { useSetRate } from "@/hooks/useLenderProfileWrite";
+import { useLenderRates } from "@/hooks/useLenderProfile";
 import type { Token } from "@/lib/tokens";
-import { cn } from "@/lib/utils";
+import { cn, ratePerSecondToAnnual } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { humanizeError } from "@/lib/errors";
 
 function sameAddress(a: string, b: string) {
   return a.toLowerCase() === b.toLowerCase();
@@ -30,25 +28,8 @@ function hasDiff(a: LendingAsset[], b: LendingAsset[]): boolean {
   });
 }
 
-function buildInitialRateInputs(
-  assets: LendingAsset[],
-): Record<string, string> {
-  const map: Record<string, string> = {};
-  for (const a of assets) {
-    map[a.token.address.toLowerCase()] = (a.ratePerSecond * 100).toFixed(2);
-  }
-  return map;
-}
-
-/**
- * One sequenced setRate call per dirty asset. The Profile contract has no
- * multicall, so each token gets its own wallet prompt. Operations are:
- *   - added / rate-changed → setRate(token, annualRate)
- *   - removed              → setRate(token, 0)
- */
 interface PendingOp {
   token: Token;
-  /** Annual rate as a 0–1 fraction. 0 = remove. */
   annualRate: number;
 }
 
@@ -72,19 +53,26 @@ function computeOps(
 }
 
 export function LendingAssetsCard() {
-  const [persisted, setPersisted] = useState<LendingAsset[]>(
-    MOCK_LENDER_PREFERENCES.lendingAssets,
-  );
-  const [draft, setDraft] = useState<LendingAsset[]>(persisted);
-  // Raw text per asset so users can type freely without controlled-input
-  // reformatting fighting their keystrokes.
-  const [rateInputs, setRateInputs] = useState<Record<string, string>>(() =>
-    buildInitialRateInputs(persisted),
-  );
-
   const setRateHook = useSetRate();
 
-  // Sequenced submission state.
+  const ratesQuery = useLenderRates(AVAILABLE_LEND_ASSETS);
+  const persisted = useMemo<LendingAsset[]>(() => {
+    const out: LendingAsset[] = [];
+    for (const token of AVAILABLE_LEND_ASSETS) {
+      const rps = ratesQuery.ratesByAddress.get(token.address.toLowerCase());
+      if (rps !== undefined && rps > 0n) {
+        out.push({
+          token,
+          ratePerSecond: ratePerSecondToAnnual(rps),
+        });
+      }
+    }
+    return out;
+  }, [ratesQuery.ratesByAddress]);
+
+  const [draft, setDraft] = useState<LendingAsset[]>([]);
+  const [rateInputs, setRateInputs] = useState<Record<string, string>>({});
+
   const [opsQueue, setOpsQueue] = useState<PendingOp[]>([]);
   const [opIndex, setOpIndex] = useState<number>(-1);
   const totalOpsRef = useRef<number>(0);
@@ -118,16 +106,13 @@ export function LendingAssetsCard() {
     const ratePerSecond = Number.isNaN(v) ? 0 : Math.max(0, v) / 100;
     setDraft((prev) =>
       prev.map((a) =>
-        sameAddress(a.token.address, address)
-          ? { ...a, ratePerSecond }
-          : a,
+        sameAddress(a.token.address, address) ? { ...a, ratePerSecond } : a,
       ),
     );
   };
 
   const dirty = hasDiff(draft, persisted);
 
-  // Pre-computed op list — also used to render "Saving 1/3…" labels.
   const previewOps = useMemo(
     () => computeOps(persisted, draft),
     [persisted, draft],
@@ -136,14 +121,13 @@ export function LendingAssetsCard() {
   const startSave = () => {
     const ops = computeOps(persisted, draft);
     if (ops.length === 0) return;
-    opsQueue.length; // hold reference (TS noise — silenced by referencing useState val)
+    opsQueue.length;
     setOpsQueue(ops);
     totalOpsRef.current = ops.length;
     successfulOpsRef.current = [];
     setOpIndex(0);
   };
 
-  // Fire the next setRate when we advance opIndex (and on initial 0).
   useEffect(() => {
     if (opIndex < 0) return;
     const op = opsQueue[opIndex];
@@ -151,11 +135,9 @@ export function LendingAssetsCard() {
     if (setRateHook.isPending || setRateHook.isConfirming) return;
     if (setRateHook.hash || setRateHook.error) return;
     setRateHook.setRate(op.token.address, op.annualRate);
-    // setRate is fire-and-forget; receipt drives the next step.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opIndex, opsQueue]);
 
-  // Advance on receipt.
   useEffect(() => {
     if (opIndex < 0 || !setRateHook.isSuccess) return;
     const op = opsQueue[opIndex];
@@ -175,9 +157,7 @@ export function LendingAssetsCard() {
     setRateHook.reset();
     const nextIndex = opIndex + 1;
     if (nextIndex >= opsQueue.length) {
-      // Done — commit the draft as persisted, surface a summary toast.
-      setPersisted(draft);
-      setRateInputs(buildInitialRateInputs(draft));
+      ratesQuery.refetch();
       setOpIndex(-1);
       setOpsQueue([]);
       const count = totalOpsRef.current;
@@ -194,19 +174,14 @@ export function LendingAssetsCard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setRateHook.isSuccess, opIndex]);
 
-  // Halt the sequence on error (user rejected, revert, etc.). Anything we
-  // did already confirm stays persisted on-chain, so we merge it locally so
-  // the UI reflects reality and the user can pick up where they left off.
   useEffect(() => {
     if (!setRateHook.error || opIndex < 0) return;
-    const partial = mergeOps(persisted, successfulOpsRef.current);
-    setPersisted(partial);
-    setRateInputs(buildInitialRateInputs(partial));
+    ratesQuery.refetch();
     setOpIndex(-1);
     setOpsQueue([]);
     totalOpsRef.current = 0;
     toast.error("Save halted", {
-      description: readableWriteError(setRateHook.error),
+      description: humanizeError(setRateHook.error),
     });
     setRateHook.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -314,31 +289,15 @@ export function LendingAssetsCard() {
                 : `Saving requires ${previewOps.length} transactions.`
               : "No unsaved changes."}
         </p>
-        <Button
+        <ChainAwareButton
           variant="primary"
           size="md"
           onClick={startSave}
           disabled={!dirty || submitting}
         >
           {buttonLabel}
-        </Button>
+        </ChainAwareButton>
       </div>
     </Card>
   );
-}
-
-function mergeOps(
-  base: LendingAsset[],
-  ops: LendingAsset[],
-): LendingAsset[] {
-  const next = base.filter(
-    (b) => !ops.some((o) => sameAddress(o.token.address, b.token.address)),
-  );
-  for (const op of ops) next.push(op);
-  return next;
-}
-
-function readableWriteError(err: Error): string {
-  const anyErr = err as Error & { shortMessage?: string };
-  return anyErr.shortMessage ?? err.message;
 }

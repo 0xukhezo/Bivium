@@ -1,138 +1,121 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import {
-  useAccount,
-  usePublicClient,
-  useWalletClient,
-  type ResolvedRegister,
-} from "wagmi";
+import { getEmbeddedConnectedWallet, useWallets } from "@privy-io/react-auth";
+import { createWalletClient, encodeFunctionData, http, type Hex } from "viem";
+import { arbitrum } from "viem/chains";
+import { usePublicClient } from "wagmi";
 import { CONTRACT_ADDRESSES } from "@/lib/contracts/addresses";
+import { BiviumProfileAbi } from "@/lib/contracts/abis/BiviumProfileAbi";
+import { createPrivyLocalAccount } from "@/lib/privy-local-account";
 
-type ConfiguredChainId = ResolvedRegister["config"]["chains"][number]["id"];
+type Status =
+  | "idle"
+  | "signing"
+  | "broadcasting"
+  | "confirming"
+  | "success"
+  | "error";
 
-const CHAIN_ID = 42161 satisfies ConfiguredChainId; // Arbitrum One
+// EIP-7702 self-sponsored activation. See lib/privy-local-account.ts for the
+// reason we hand-build the viem account instead of using Privy's
+// `toViemAccount` (its bundled transaction serializer rejects type-4 in
+// SDK 3.29 / @privy-io/ethereum 0.1.4).
+const alchemyKey = process.env.NEXT_PUBLIC_ALCHEMY_KEY;
+const arbitrumRpc = alchemyKey
+  ? `https://arb-mainnet.g.alchemy.com/v2/${alchemyKey}`
+  : undefined;
 
-/**
- * Performs the one-shot EIP-7702 delegation that turns the connected EOA into
- * a BiviumProfile instance.
- *
- * Flow:
- *   1. `walletClient.signAuthorization({ ..., executor: "self" })` — the EOA
- *      signs an authorization for our Profile template. `executor: "self"`
- *      tells viem the same EOA will send the tx, so it bumps the auth nonce
- *      by 1 (the tx itself consumes the current nonce).
- *   2. `walletClient.sendTransaction({ to: self, data: "0x", authorizationList })`
- *      — broadcasts a type-0x04 set-code tx. The auth installs the delegation
- *      on the EOA; the call to `self` is a no-op that runs the just-installed
- *      Profile code (no initializer to call — Profile's setters auto-register
- *      via `_ensureRegistered()` on first use).
- *   3. `useWaitForTransactionReceipt` confirms.
- *
- * Wallets that don't yet support EIP-7702 throw on step 1 — surfaced via the
- * returned `notSupported` flag so the UI can show a fallback.
- */
 export function useActivateProfile() {
-  const { address } = useAccount();
-  const { data: walletClient } = useWalletClient();
-  const publicClient = usePublicClient();
+  const { wallets } = useWallets();
+  const publicClient = usePublicClient({ chainId: arbitrum.id });
   const profileAddress = CONTRACT_ADDRESSES.profile;
 
-  const [hash, setHash] = useState<`0x${string}` | undefined>(undefined);
-  const [isPending, setIsPending] = useState(false);
-  const [isConfirming, setIsConfirming] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [status, setStatus] = useState<Status>("idle");
+  const [hash, setHash] = useState<Hex | null>(null);
   const [error, setError] = useState<Error | null>(null);
-  const [notSupported, setNotSupported] = useState(false);
 
   const reset = useCallback(() => {
-    setHash(undefined);
-    setIsPending(false);
-    setIsConfirming(false);
-    setIsSuccess(false);
+    setStatus("idle");
+    setHash(null);
     setError(null);
-    setNotSupported(false);
   }, []);
 
   const activate = useCallback(async () => {
-    reset();
-    if (!walletClient) {
-      setError(new Error("Wallet client not ready"));
-      return;
-    }
-    if (!address) {
-      setError(new Error("Wallet not connected"));
-      return;
-    }
+    setError(null);
+    setHash(null);
+
     if (!profileAddress) {
       setError(
-        new Error(
-          "BiviumProfile address not configured — set NEXT_PUBLIC_BIVIUM_PROFILE_ADDRESS",
-        ),
+        new Error("NEXT_PUBLIC_BIVIUM_PROFILE_ADDRESS is not configured"),
       );
+      setStatus("error");
       return;
     }
     if (!publicClient) {
-      setError(new Error("RPC client not ready"));
+      setError(new Error("Arbitrum RPC client unavailable"));
+      setStatus("error");
+      return;
+    }
+    const embedded = getEmbeddedConnectedWallet(wallets);
+    if (!embedded) {
+      setError(new Error("Privy embedded wallet not ready"));
+      setStatus("error");
       return;
     }
 
-    setIsPending(true);
     try {
+      const account = createPrivyLocalAccount(embedded);
+      const walletClient = createWalletClient({
+        account,
+        chain: arbitrum,
+        transport: http(arbitrumRpc),
+      });
+
+      setStatus("signing");
       const authorization = await walletClient.signAuthorization({
-        account: address,
         contractAddress: profileAddress,
-        chainId: CHAIN_ID,
         executor: "self",
       });
 
+      setStatus("broadcasting");
+      // BiviumProfile has no payable fallback / receive(), so an empty-data
+      // self-call would revert during `eth_estimateGas` (which simulates with
+      // the delegation already applied). `paused()` is a view function that
+      // exists in the ABI — installs the delegation and exits cleanly.
       const txHash = await walletClient.sendTransaction({
-        account: address,
-        to: address,
-        data: "0x",
         authorizationList: [authorization],
-        chain: walletClient.chain,
+        to: account.address,
+        data: encodeFunctionData({
+          abi: BiviumProfileAbi,
+          functionName: "paused",
+        }),
       });
       setHash(txHash);
-      setIsPending(false);
-      setIsConfirming(true);
 
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash: txHash,
-      });
-      setIsConfirming(false);
-      if (receipt.status === "success") {
-        setIsSuccess(true);
-      } else {
-        setError(new Error("Activation transaction reverted"));
-      }
+      setStatus("confirming");
+      await publicClient.waitForTransactionReceipt({ hash: txHash });
+      setStatus("success");
     } catch (err) {
-      setIsPending(false);
-      setIsConfirming(false);
       const e = err instanceof Error ? err : new Error(String(err));
-      // viem throws specific errors when the connector / wallet doesn't
-      // support type-4 (set-code) txs. We sniff on name + message.
-      const msg = e.message.toLowerCase();
-      if (
-        e.name === "MethodNotSupportedRpcError" ||
-        e.name === "UnsupportedTransactionTypeError" ||
-        msg.includes("does not support") ||
-        msg.includes("authorization") && msg.includes("not supported")
-      ) {
-        setNotSupported(true);
-      }
+      console.error("[activate] failed", e);
       setError(e);
+      setStatus("error");
     }
-  }, [walletClient, publicClient, address, profileAddress, reset]);
+  }, [wallets, profileAddress, publicClient]);
+
+  const isPending =
+    status === "signing" ||
+    status === "broadcasting" ||
+    status === "confirming";
 
   return {
     activate,
+    status,
     hash,
-    isPending,
-    isConfirming,
-    isSuccess,
     error,
-    notSupported,
     reset,
+    isPending,
+    isSuccess: status === "success",
   };
 }

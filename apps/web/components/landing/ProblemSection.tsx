@@ -1,17 +1,10 @@
 import { SectionEyebrow } from "./SectionEyebrow";
 
-/**
- * The rsETH/Aave incident, rendered as an editorial timeline rather than
- * three stat cards. The numbers anchor a sequence of cause-and-effect, which
- * makes the structural failure read more clearly than isolated stats.
- */
 export function ProblemSection() {
   return (
     <section
       className="relative overflow-hidden"
       style={{
-        // Feathered sunken band — fades in from the surrounding bg at the top,
-        // holds bg-sunken through the body, and fades back out at the bottom.
         background:
           "linear-gradient(to bottom, var(--bg) 0%, var(--bg-sunken) 14%, var(--bg-sunken) 86%, var(--bg) 100%)",
       }}
@@ -40,7 +33,6 @@ export function ProblemSection() {
             </blockquote>
           </div>
 
-          {/* Timeline column. Vertical rail with three calibrated milestones. */}
           <ol className="relative space-y-10 lg:pl-6">
             <div
               aria-hidden

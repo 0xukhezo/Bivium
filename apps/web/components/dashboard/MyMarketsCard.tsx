@@ -10,11 +10,12 @@ import {
   type SortState,
 } from "@/components/ui/SortableHeader";
 import { MarketStatusModal } from "./MarketStatusModal";
-import { MOCK_LENDER_MARKETS, type LenderMarket } from "@/lib/lender";
+import { type LenderMarket } from "@/lib/lender";
 import { useSetRate } from "@/hooks/useLenderProfileWrite";
 import type { Token } from "@/lib/tokens";
 import { formatCompact, formatPercent, formatUsd } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { humanizeError } from "@/lib/errors";
 
 type SortKey =
   | "collateral"
@@ -41,22 +42,14 @@ function compare(key: SortKey, a: LenderMarket, b: LenderMarket): number {
   }
 }
 
-/**
- * Pause/resume is wired to BiviumProfile.setRate(loanToken, rate):
- *   pause  → setRate(loanToken, 0)
- *   resume → setRate(loanToken, market.ratePerSecond)
- *
- * Caveat: setRate is keyed per loan token, not per (collateral, loan) pair.
- * Two markets sharing the same loanToken will pause / resume together. If
- * pair-scoped control becomes a requirement, this code needs to migrate to
- * a future per-market kill-switch on the Profile contract. */
+// Caveat: setRate is per loan token, so two markets sharing a loanToken
+// pause/resume together until a per-pair kill-switch lands on the contract.
 export function MyMarketsCard() {
-  const [markets, setMarkets] = useState<LenderMarket[]>(MOCK_LENDER_MARKETS);
+  // TODO(lender-markets-endpoint): query `/api/v1/lenders/:address/markets`.
+  const [markets, setMarkets] = useState<LenderMarket[]>([]);
   const [statusMarket, setStatusMarket] = useState<LenderMarket | null>(null);
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
 
-  // Track the in-flight toggle so we know which row to flip once the receipt
-  // confirms (or to leave alone if the user rejects in their wallet).
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [pendingNextStatus, setPendingNextStatus] = useState<
     LenderMarket["status"] | null
@@ -65,7 +58,6 @@ export function MyMarketsCard() {
   const setRateHook = useSetRate();
   const isSubmitting = setRateHook.isPending || setRateHook.isConfirming;
 
-  // Flip status locally on receipt; clear pending tracking either way.
   useEffect(() => {
     if (!setRateHook.isSuccess || !pendingId || !pendingNextStatus) return;
     const targetMarket = markets.find((m) => m.id === pendingId);
@@ -99,7 +91,7 @@ export function MyMarketsCard() {
     setPendingId(null);
     setPendingNextStatus(null);
     toast.error("Transaction failed", {
-      description: readableWriteError(setRateHook.error),
+      description: humanizeError(setRateHook.error),
     });
   }, [setRateHook.error]);
 
@@ -138,8 +130,12 @@ export function MyMarketsCard() {
       </CardHeader>
       {markets.length === 0 ? (
         <div className="rounded-md border border-border bg-bg-sunken px-4 py-12 text-center">
-          <p className="text-text-secondary">
-            You haven&apos;t created any markets yet.
+          <p className="text-text-primary">
+            No active markets yet
+          </p>
+          <p className="mx-auto mt-2 max-w-md text-sm text-text-secondary">
+            Once you save a rate and accept collateral below, the matching
+            markets will show up here for you to pause or resume.
           </p>
         </div>
       ) : (
@@ -292,9 +288,3 @@ function TokenCell({ token }: { token: Token }) {
   );
 }
 
-/** Surface the most useful message out of wagmi / viem errors. The
- *  long stack is overwhelming; `shortMessage` is curated when present. */
-function readableWriteError(err: Error): string {
-  const anyErr = err as Error & { shortMessage?: string };
-  return anyErr.shortMessage ?? err.message;
-}

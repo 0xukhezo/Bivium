@@ -2,6 +2,7 @@
 
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { ChainAwareButton } from "@/components/wallet/ChainAwareButton";
 import type { LenderMarket } from "@/lib/lender";
 
 interface MarketStatusModalProps {
@@ -9,8 +10,6 @@ interface MarketStatusModalProps {
   open: boolean;
   onClose: () => void;
   onConfirm: () => void;
-  /** Parent-owned submitting state — true while the writeContract is pending
-   *  or the receipt is being confirmed. The modal stays open through both. */
   submitting: boolean;
 }
 
@@ -66,7 +65,7 @@ export function MarketStatusModal({
         >
           Cancel
         </Button>
-        <Button
+        <ChainAwareButton
           variant="primary"
           size="md"
           className="flex-1"
@@ -78,7 +77,7 @@ export function MarketStatusModal({
             : pausing
               ? "Pause market"
               : "Resume market"}
-        </Button>
+        </ChainAwareButton>
       </div>
     </Modal>
   );

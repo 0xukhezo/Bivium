@@ -24,10 +24,10 @@ export function BorrowFlowDiagram() {
 
     const onMove = (e: PointerEvent) => {
       const r = scene.getBoundingClientRect();
-      const nx = (e.clientX - r.left) / r.width - 0.5; // -0.5 … 0.5
+      const nx = (e.clientX - r.left) / r.width - 0.5;
       const ny = (e.clientY - r.top) / r.height - 0.5;
-      tx = -6 + nx * 10; // ±5° around the resting -6°
-      ty = 18 - ny * 8; // ±4° around resting 18°
+      tx = -6 + nx * 10;
+      ty = 18 - ny * 8;
       if (!rafId) rafId = requestAnimationFrame(apply);
     };
 
@@ -54,16 +54,13 @@ export function BorrowFlowDiagram() {
       ref={sceneRef}
       className="scene-3d relative mx-auto aspect-square w-full max-w-[560px]"
     >
-      {/* Stage — everything inside lives on a tilted 3D plane. */}
       <div ref={stageRef} className="stage-3d absolute inset-0">
-        {/* Floor plate — tilted, with grid + radial fade. */}
         <div
           aria-hidden
           className="floor-grid absolute left-1/2 top-1/2 h-[120%] w-[120%] -translate-x-1/2 -translate-y-1/2 rounded-[50%]"
           style={{ transform: "translate(-50%, -50%) translateZ(-80px)" }}
         />
 
-        {/* Soft underlight glow on the floor. */}
         <div
           aria-hidden
           className="pointer-events-none absolute left-1/2 top-1/2 h-[70%] w-[80%] -translate-x-1/2 -translate-y-1/2 rounded-[50%]"
@@ -74,7 +71,6 @@ export function BorrowFlowDiagram() {
           }}
         />
 
-        {/* SVG layer carries the arcs + arrows. Sits between floor and pucks. */}
         <svg
           viewBox="0 0 560 560"
           className="absolute inset-0 h-full w-full"
@@ -229,8 +225,6 @@ export function BorrowFlowDiagram() {
   );
 }
 
-/** A single 3D node. Icon-only — no puck disc — with a soft halo and a
- *  projected floor shadow. Label flips above or below to clear incoming arrows. */
 function Puck({
   x,
   y,
@@ -326,9 +320,6 @@ function Puck({
   );
 }
 
-/** Abstract 3D user glyph — a sphere head and a rounded bust, both painted
- *  with the same brand-blue radial gradient as the Market cylinder. No face,
- *  no hair: just two clean volumes lit from the top-left. */
 function PersonGlyph() {
   return (
     <svg viewBox="0 0 96 96" className="h-[88px] w-[88px]" aria-hidden>

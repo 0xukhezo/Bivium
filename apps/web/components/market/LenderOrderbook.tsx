@@ -30,8 +30,6 @@ export function LenderOrderbook({
     );
   }
 
-  // Build the cumulative-size column and the max for depth-bar scaling.
-  // Last row's cumulative == totalDepth → its bar spans 100% of the row.
   let running = 0;
   const rows = offers.map((offer) => {
     running += offer.indicativeSize.amount;
@@ -50,7 +48,6 @@ export function LenderOrderbook({
       <div className="flex flex-col gap-0.5">
         {rows.map(({ offer, cumulative }, i) => {
           const depthPct = (cumulative / totalDepth) * 100;
-          // Stagger the row + depth animations so the book "fills" top-down.
           const delay = `${i * 35}ms`;
           return (
             <div

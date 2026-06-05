@@ -4,7 +4,6 @@ import { BorrowFlowDiagram } from "./BorrowFlowDiagram";
 export function Hero() {
   return (
     <section className="relative overflow-hidden">
-      {/* Layered background: top radial accent + hairline grid scaffold. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 mx-auto h-[680px] max-w-6xl bg-[radial-gradient(ellipse_at_top,_var(--color-arb-cyan)_0%,_transparent_55%)] opacity-[0.10]"

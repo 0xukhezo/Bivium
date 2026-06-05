@@ -5,10 +5,6 @@ import { createPortal } from "react-dom";
 import { AlertCircle, CheckCircle2, Info, X, AlertTriangle } from "lucide-react";
 import { dismiss, getToasts, subscribe, type Toast as ToastT } from "@/lib/toast";
 
-/**
- * Toast renderer. Subscribes to the singleton store in lib/toast and portals
- * the stack to document.body so it escapes any sticky-header / backdrop-filter
- * containing blocks. Mount once near the root (already wired in providers). */
 export function Toaster() {
   const [mounted, setMounted] = useState(false);
   const [toasts, setToasts] = useState<ToastT[]>([]);
@@ -69,7 +65,6 @@ function ToastItem({ toast: t }: { toast: ToastT }) {
     if (t.duration === null) return;
     const id = window.setTimeout(() => {
       setExiting(true);
-      // Match the exit animation duration before removing from the store.
       window.setTimeout(() => dismiss(t.id), 200);
     }, t.duration);
     return () => window.clearTimeout(id);

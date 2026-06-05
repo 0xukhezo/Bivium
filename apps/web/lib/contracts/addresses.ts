@@ -2,36 +2,44 @@ import { arbitrum } from "wagmi/chains";
 
 const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
 
-function readAddress(name: string): `0x${string}` | undefined {
-  const raw = process.env[name];
+// Next.js only inlines `process.env.X` when the access is static; call sites
+// must pass `process.env.NEXT_PUBLIC_*` directly.
+function validate(
+  raw: string | undefined,
+  name: string,
+): `0x${string}` | undefined {
   if (!raw) return undefined;
   if (!ADDRESS_RE.test(raw)) {
-    // Fail loudly in dev: an env var that's set but malformed is almost
-    // certainly a copy-paste mistake.
     throw new Error(`Env var ${name} is not a valid 0x address: ${raw}`);
   }
   return raw.toLowerCase() as `0x${string}`;
 }
 
-/**
- * Deployed contract addresses on Arbitrum mainnet, sourced from env so the
- * same build can target different deploys. `undefined` when the env var is
- * not set — the wagmi hooks must guard with `query: { enabled: ... }` before
- * issuing any read/write.
- */
 export const CONTRACT_ADDRESSES = {
-  bivium: readAddress("NEXT_PUBLIC_BIVIUM_ADDRESS"),
-  router: readAddress("NEXT_PUBLIC_BIVIUM_ROUTER_ADDRESS"),
-  eventEmitter: readAddress("NEXT_PUBLIC_BIVIUM_EVENT_EMITTER_ADDRESS"),
-  // BiviumProfile template — the contract every lender's EOA delegates to via
-  // EIP-7702. Same address for all lenders; per-lender storage lives on the
-  // EOA itself (ERC-7201 namespacing inside the template).
-  profile: readAddress("NEXT_PUBLIC_BIVIUM_PROFILE_ADDRESS"),
+  bivium: validate(
+    process.env.NEXT_PUBLIC_BIVIUM_ADDRESS,
+    "NEXT_PUBLIC_BIVIUM_ADDRESS",
+  ),
+  router: validate(
+    process.env.NEXT_PUBLIC_BIVIUM_ROUTER_ADDRESS,
+    "NEXT_PUBLIC_BIVIUM_ROUTER_ADDRESS",
+  ),
+  eventEmitter: validate(
+    process.env.NEXT_PUBLIC_BIVIUM_EVENT_EMITTER_ADDRESS,
+    "NEXT_PUBLIC_BIVIUM_EVENT_EMITTER_ADDRESS",
+  ),
+  profile: validate(
+    process.env.NEXT_PUBLIC_BIVIUM_PROFILE_ADDRESS,
+    "NEXT_PUBLIC_BIVIUM_PROFILE_ADDRESS",
+  ),
+  oracleFactory: validate(
+    process.env.NEXT_PUBLIC_BIVIUM_ORACLE_FACTORY_ADDRESS,
+    "NEXT_PUBLIC_BIVIUM_ORACLE_FACTORY_ADDRESS",
+  ),
 } as const;
 
 export const CONTRACTS_CHAIN_ID = arbitrum.id;
 
-/** Throws a friendly error if the address is missing — use at write sites. */
 export function requireAddress(
   name: keyof typeof CONTRACT_ADDRESSES,
 ): `0x${string}` {

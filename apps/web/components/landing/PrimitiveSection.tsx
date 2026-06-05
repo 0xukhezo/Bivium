@@ -1,14 +1,8 @@
 import { SectionEyebrow } from "./SectionEyebrow";
 
-/**
- * The primitive — the sovereign-lender pitch. A two-column section: the prose
- * sets up the model, and a "lender card" mockup makes it concrete.
- */
 export function PrimitiveSection() {
   return (
     <section id="primitive" className="relative overflow-hidden">
-      {/* Soft ambient highlight at the section center — gives the canvas
-          some life without a hard border. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-1/3 -z-10 mx-auto h-[480px] max-w-5xl bg-[radial-gradient(ellipse_at_center,_var(--color-arb-cyan)_0%,_transparent_60%)] opacity-[0.06]"
@@ -32,7 +26,6 @@ export function PrimitiveSection() {
             </p>
           </div>
 
-          {/* "Lender card" mockup — gives the abstract idea a face. */}
           <LenderCardMock />
         </div>
       </div>
@@ -40,7 +33,6 @@ export function PrimitiveSection() {
   );
 }
 
-/** A miniature mock of what a sovereign lender card looks like on Bivium. */
 function LenderCardMock() {
   return (
     <div className="relative">

@@ -1,26 +1,16 @@
 import { ARBITRUM_TOKENS, type Token } from "./tokens";
 
-/**
- * A single lender's resting limit order in the credit orderbook. One per
- * `(lender, loanToken)` because each lender has one rate per loan token
- * (`BiviumProfile.setRate(loanToken, ratePerSecond)`). `acceptedCollaterals`
- * is global per lender (the Profile's allowedCollaterals whitelist).
- *
- * Source of truth at runtime is the indexer; this mock keeps the UI alive
- * until that read is wired.
- */
 export interface LenderOffer {
   lender: `0x${string}`;
-  displayName: string; // ENS or short label
+  displayName: string;
   loanToken: Token;
-  /** TODO: 1e18 bigint per-second tomorrow. Today: 0–1 annualized fraction. */
+  /** TODO: 1e18 bigint per-second. Today: 0–1 annualized fraction. */
   ratePerSecond: number;
   indicativeSize: { amount: number; usd: number };
   acceptedCollaterals: Token[];
   paused: boolean;
 }
 
-// Six fake lenders — addresses are deterministic-looking but synthetic.
 const LENDERS = [
   { addr: `0xc0be000000000000000000000000000000000001`, name: "cobie.eth" },
   { addr: `0x1c6e000000000000000000000000000000000002`, name: "vitalik.eth" },
@@ -36,9 +26,6 @@ const PRICES_USD: Record<string, number> = {
   ETH: 3_500,
 };
 
-// Each lender offers each loan token, with a per-lender rate skew and a
-// per-token rate bias (USDC > ETH > WBTC). Collateral whitelists vary so the
-// pair filter actually changes which offers are visible.
 function buildOffers(): LenderOffer[] {
   const tokens = [
     ARBITRUM_TOKENS.USDC,
@@ -61,8 +48,8 @@ function buildOffers(): LenderOffer[] {
 
   const out: LenderOffer[] = [];
   LENDERS.forEach((l, i) => {
-    const lenderSkew = (i % 5) * 0.004; // 0 → 1.6% spread between lenders
-    const sizeBase = 50_000 + i * 35_000; // 50k → 225k USD indicative size
+    const lenderSkew = (i % 5) * 0.004;
+    const sizeBase = 50_000 + i * 35_000;
     tokens.forEach((loanToken) => {
       const ratePerSecond =
         (tokenRateBias[loanToken.symbol] ?? 0.04) + lenderSkew;
@@ -77,7 +64,7 @@ function buildOffers(): LenderOffer[] {
           usd: sizeBase,
         },
         acceptedCollaterals: collateralProfiles[i],
-        paused: i === 4, // bob.eth is paused — proves the filter works
+        paused: i === 4,
       });
     });
   });
@@ -90,7 +77,6 @@ function sameAddress(a: string, b: string) {
   return a.toLowerCase() === b.toLowerCase();
 }
 
-/** Active, accepting offers for the pair, sorted by rate ascending. */
 export function offersForPair(
   loanToken: Token,
   collateralToken: Token,
@@ -105,7 +91,6 @@ export function offersForPair(
   ).sort((a, b) => a.ratePerSecond - b.ratePerSecond);
 }
 
-/** Single allocation in the order-book walk. */
 export interface Fill {
   offer: LenderOffer;
   amount: number;
@@ -118,12 +103,6 @@ export interface WalkResult {
   bestRate: number;
 }
 
-/**
- * Greedy walk over rate-ascending offers — mirrors what `BiviumRouter.borrow`
- * does on chain. Returns fills, the total filled (≤ requested), the weighted-
- * average rate of the filled amount, and the book's best (lowest) rate so the
- * UI can compute slippage caps off it.
- */
 export function walkOrderbook(
   offers: LenderOffer[],
   requested: number,

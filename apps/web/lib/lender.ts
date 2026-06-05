@@ -2,7 +2,7 @@ import { ARBITRUM_TOKENS, type Token } from "./tokens";
 
 export interface LendingAsset {
   token: Token;
-  /** TODO: 1e18 bigint tomorrow. Today: 0–1 annualized fraction. */
+  /** TODO: 1e18 bigint once chain reads land. Today: 0–1 annualized fraction. */
   ratePerSecond: number;
 }
 
@@ -11,20 +11,14 @@ export interface LenderPreferences {
   collateralAssets: Token[];
 }
 
-/**
- * A lender's owned market — the result of joining `markets` with the
- * aggregated `positions.collateral` for `marketId = market.id`. Field names
- * match the indexer's `markets` columns where possible; `totalCollateral` is
- * the aggregated join result (no schema column for it directly).
- */
 export interface LenderMarket {
   id: `0x${string}`;
   collateralToken: Token;
   loanToken: Token;
   creator: `0x${string}`;
-  /** TODO: 1e18 bigint tomorrow. */
+  /** TODO: 1e18 bigint. */
   lltv: number;
-  /** TODO: 1e18 bigint per-second tomorrow. */
+  /** TODO: 1e18 bigint per-second. */
   ratePerSecond: number;
   totalBorrowAssets: { amount: number; usd: number };
   totalCollateral: { amount: number; usd: number };
@@ -32,8 +26,6 @@ export interface LenderMarket {
   status: "active" | "paused";
 }
 
-// Backend-provided lists of assets a lender may lend / accept as collateral.
-// Same three tokens for now; real lists arrive when the backend is wired.
 export const AVAILABLE_LEND_ASSETS: Token[] = [
   ARBITRUM_TOKENS.WBTC,
   ARBITRUM_TOKENS.ETH,
@@ -46,7 +38,6 @@ export const AVAILABLE_COLLATERAL_ASSETS: Token[] = [
   ARBITRUM_TOKENS.USDC,
 ];
 
-// Current lender state (what's "persisted on-chain" in mock terms).
 export const MOCK_LENDER_PREFERENCES: LenderPreferences = {
   lendingAssets: [
     { token: ARBITRUM_TOKENS.USDC, ratePerSecond: 0.05 },

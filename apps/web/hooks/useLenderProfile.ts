@@ -4,17 +4,15 @@ import { useAccount, useReadContract, useReadContracts } from "wagmi";
 import type { ResolvedRegister } from "wagmi";
 import { BiviumProfileAbi } from "@/lib/contracts";
 import type { Token } from "@/lib/tokens";
+import { useEmbeddedAddress } from "./useEmbeddedAddress";
 
 type ConfiguredChainId = ResolvedRegister["config"]["chains"][number]["id"];
 
 const CHAIN_ID: ConfiguredChainId = 42161;
 
-/**
- * Reads from the connected wallet's BiviumProfile (the lender's own EOA acting
- * as the ERC-7702 delegate). Returns undefined fields when disconnected.
- */
 export function useLenderProfile() {
-  const { address, isConnected } = useAccount();
+  const { isConnected } = useAccount();
+  const address = useEmbeddedAddress();
   const enabled = Boolean(address);
 
   const paused = useReadContract({
@@ -47,12 +45,8 @@ export function useLenderProfile() {
   };
 }
 
-/**
- * Batch-read the lender's per-token rate. Returns a map keyed by lowercased
- * token address → ratePerSecond (bigint, 0 when unset on chain).
- */
 export function useLenderRates(tokens: readonly Token[]) {
-  const { address } = useAccount();
+  const address = useEmbeddedAddress();
   const enabled = Boolean(address) && tokens.length > 0;
 
   const { data, isLoading, refetch } = useReadContracts({
