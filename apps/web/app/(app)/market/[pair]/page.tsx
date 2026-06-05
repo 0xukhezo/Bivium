@@ -1,46 +1,90 @@
-import type { Metadata } from "next";
+"use client";
+
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, useParams } from "next/navigation";
+import { useEffect, useMemo } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { LenderOrderbook } from "@/components/market/LenderOrderbook";
 import { MarketDetailActions } from "@/components/market/MarketDetailActions";
-import { getMarketByPair, type Market } from "@/lib/markets";
+import { useMarkets } from "@/hooks/useMarkets";
+import { getMarketSlug, type Market } from "@/lib/markets";
 import {
   formatCompact,
   formatPercent,
   formatUsd,
   truncateAddress,
 } from "@/lib/utils";
+import { humanizeError } from "@/lib/errors";
 
-interface PageProps {
-  params: { pair: string };
+export default function MarketDetailPage() {
+  const params = useParams<{ pair: string }>();
+  const pair = params.pair?.toLowerCase() ?? "";
+
+  const query = useMarkets();
+  const market = useMemo(() => {
+    if (!query.data) return undefined;
+    return query.data.find((m) => getMarketSlug(m) === pair);
+  }, [query.data, pair]);
+
+  // Dynamic <title> — client components can't use generateMetadata.
+  useEffect(() => {
+    if (!market) return;
+    document.title = `${market.collateralToken.symbol} / ${market.loanToken.symbol} · Bivium`;
+    return () => {
+      document.title = "Bivium";
+    };
+  }, [market]);
+
+  if (query.isPending) {
+    return (
+      <>
+        <BackLink />
+        <Card className="flex items-center justify-center py-16">
+          <p className="text-text-secondary">Loading market…</p>
+        </Card>
+      </>
+    );
+  }
+
+  if (query.isError) {
+    return (
+      <>
+        <BackLink />
+        <Card className="flex items-center justify-center border-danger/30 bg-danger/10 py-16">
+          <p className="text-sm text-text-secondary">
+            Couldn&apos;t load market. {humanizeError(query.error)}
+          </p>
+        </Card>
+      </>
+    );
+  }
+
+  if (!market) {
+    notFound();
+  }
+
+  return <MarketDetail market={market} />;
 }
 
-export function generateMetadata({ params }: PageProps): Metadata {
-  const market = getMarketByPair(params.pair);
-  return {
-    title: market
-      ? `${market.collateralToken.symbol} / ${market.loanToken.symbol} · Bivium`
-      : "Market · Bivium",
-  };
+function BackLink() {
+  return (
+    <Link
+      href="/market"
+      className="mb-6 inline-flex items-center gap-1.5 text-sm text-text-secondary transition-colors duration-base ease-out-expo hover:text-text-primary"
+    >
+      <ArrowLeft size={16} aria-hidden="true" />
+      Back to markets
+    </Link>
+  );
 }
 
-export default function MarketDetailPage({ params }: PageProps) {
-  const market = getMarketByPair(params.pair);
-  if (!market) notFound();
-
+function MarketDetail({ market }: { market: Market }) {
   const { collateralToken, loanToken } = market;
 
   return (
     <>
-      <Link
-        href="/market"
-        className="mb-6 inline-flex items-center gap-1.5 text-sm text-text-secondary transition-colors duration-base ease-out-expo hover:text-text-primary"
-      >
-        <ArrowLeft size={16} aria-hidden="true" />
-        Back to markets
-      </Link>
+      <BackLink />
 
       {/* Top section — full-width pair header. */}
       <header className="mb-6 flex flex-wrap items-center gap-4">
@@ -83,9 +127,12 @@ export default function MarketDetailPage({ params }: PageProps) {
       {/* Body — 2/3 chart + order book on the left, 1/3 stats panel on the right. */}
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
-          <Card>
+          {/* TODO(remove-when-real): chart is hard-coded SVG; red border
+              flags it as mock until the historical-data endpoint lands. */}
+          <Card className="!border-danger">
             <CardHeader>
               <CardTitle>Utilization</CardTitle>
+              <MockBadge />
               <span className="text-xs text-text-muted">
                 {formatPercent(utilization(market))} borrowed
               </span>
@@ -93,9 +140,13 @@ export default function MarketDetailPage({ params }: PageProps) {
             <ChartPlaceholder />
           </Card>
 
-          <Card>
+          {/* TODO(remove-when-real): LenderOrderbook reads from
+              lib/lender-offers.ts (deterministic mocks). Red border flags it
+              as mock until the orderbook depth endpoint lands. */}
+          <Card className="!border-danger">
             <CardHeader>
               <CardTitle>Order book</CardTitle>
+              <MockBadge />
               <span className="text-xs text-text-muted">
                 Lenders offering {loanToken.symbol} against{" "}
                 {collateralToken.symbol}
@@ -177,6 +228,17 @@ function StatRow({
         <p className="mt-0.5 text-xs tabular-nums text-text-muted">{sub}</p>
       ) : null}
     </div>
+  );
+}
+
+// Visible marker that the surrounding card is still fed by mocks. Pairs
+// with the red border on the parent Card. Delete this component once both
+// the chart and the order book read from the indexer.
+function MockBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-pill border border-danger/40 bg-danger/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-danger">
+      Mock data
+    </span>
   );
 }
 

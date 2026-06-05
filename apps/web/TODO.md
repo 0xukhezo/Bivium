@@ -4,10 +4,11 @@ Punch list of everything between today's state and a production-ready beta.
 Tiered by impact, with file references where useful. Use the checkboxes to
 track progress.
 
-> Snapshot date: 2026-05-29.
+> Snapshot date: 2026-06-05.
 > Currently on-chain: **wallet balances**, **EIP-7702 activation**, **lender
 > preference writes** (rate / collateral / pause), **repay** (wired but will
-> revert without real `MarketParams`). Everything else reads from `MOCK_*`.
+> revert without real `MarketParams.oracle`). Lender markets, borrower loans,
+> and market detail all read live from the indexer-backed API.
 
 ---
 
@@ -44,34 +45,6 @@ The product does not function without these.
   exact-amount default with a "Don't ask again" toggle that bumps to
   `type(uint256).max`).
 
-### Indexer data wire-up
-
-- [x] **Backend API client** at `lib/api/client.ts` (`API_BASE`, env-overridable
-  via `NEXT_PUBLIC_BIVIUM_API_URL`).
-- [x] **Markets list** wired to `/api/v1/markets` via
-  `lib/api/markets.ts` + `hooks/useMarkets.ts`. `MarketTable` now renders
-  live markets, with skeleton-row loading, error + retry, and "no markets
-  created yet" empty states. Number → bigint conversion lives in the
-  adapter; consumers still see the existing `Market` shape.
-- [ ] **Market detail page** (`app/(app)/market/[pair]/page.tsx`) still
-  reads from `MOCK_MARKETS` via `getMarketByPair`. Either await
-  `fetchMarkets()` server-side or add a `/markets/:pair` detail endpoint
-  that returns the full `MarketParams` (oracle + creator), then update
-  `getMarketByPair` to fetch.
-- [ ] Replace `MOCK_LENDER_MARKETS` (`lib/lender.ts`) with a query that joins
-  `markets` ⋈ aggregated `positions.collateral` filtered by `creator == self`.
-  Drives `MyMarketsCard`.
-- [ ] Replace `MOCK_LENDER_PREFERENCES` with real reads. **`useLenderProfile`
-  and `useLenderRates` already exist in `hooks/useLenderProfile.ts` but
-  `LendingAssetsCard` and `CollateralAssetsCard` still don't consume them.**
-- [ ] Replace `MOCK_BORROWER_LOANS` (`lib/borrower.ts`) with a positions query
-  filtered by `borrower == self`, joined to `markets`. Drives `BorrowerView`.
-- [x] **Loading skeletons** for the markets list. Apply the same
-  `SkeletonTable` pattern to remaining tables (`MyMarketsCard`,
-  `MyLoansCard`) as they switch to live data.
-- [x] **Empty states** for the markets list (no-markets vs no-filter-matches
-  are now distinct). Carry the same pattern to the remaining lists.
-
 ### Number → bigint migration
 
 - [ ] Every `lib/markets.ts`, `lib/lender.ts`, `lib/borrower.ts` field carries
@@ -86,14 +59,13 @@ The product does not function without these.
   (`BigInt(Math.round(amount * 10**decimals))`) breaks above ~9 quadrillion
   base units. Once amounts are bigint end-to-end this disappears.
 
-### Real `MarketParams`, not placeholders
+### Real `MarketParams.oracle` for repay
 
-- [ ] `BorrowerView.tsx` and any future borrow call use
-  `ORACLE_PLACEHOLDER = 0x0000…`. Since the on-chain market id is
-  `keccak(MarketParams)`, every real tx reverts at the engine. Blocked on
-  the indexer wire-up (above) — once positions carry their oracle + creator,
-  `buildRepayItem` / `buildBorrowItem` use real fields and the
-  `TODO(indexer-wire-up)` comment in `BorrowerView.tsx` can be removed.
+- [ ] `BorrowerView.buildRepayItem` still hard-codes
+  `ORACLE_PLACEHOLDER = 0x0000…`. The indexer carries `oracle` per position
+  (`BorrowerLoanPositionDto.oracle`) — plumb it through `BorrowerLoan` and
+  remove the placeholder. Without this every real `repay` reverts at
+  `keccak(MarketParams) != marketId`.
 
 ---
 
@@ -144,20 +116,20 @@ The product does not function without these.
 - [ ] A borrower with an open position needs a "Top up collateral" action
   on each loan row in `MyLoansCard` to lift HF.
 
+### Lender-side market creation
+
+- [ ] After a lender saves a rate + accepted-collateral pair, no UI surfaces
+  `Bivium.createMarket(input)`. Without it, the configured offer doesn't
+  appear in `MyMarketsCard` (no `Bivium:CreateMarket` event ⇒ no
+  `markets` row). Add either a "Create market" button per lendable / accepted
+  pair, or auto-fan-out at the end of the activation wizard.
+
 ### Mobile responsiveness
 
 - [ ] Every table is `min-w-[720px]` to `min-w-[820px]` — forces horizontal
   scroll on mobile rather than collapsing to cards.
 - [ ] Cards on `/dashboard` stack but tables inside them still scroll.
   Rewrite tables to flip to a card-per-row layout under `md`.
-
-### Loading + empty states
-
-- [ ] With mocks they're instant. With real data, every table needs a
-  skeleton-row state.
-- [ ] Empty-state copy + illustration for: no markets created, no loans, no
-  positions yet, no preferences saved. Today there's only the
-  "No markets match the current filter" empty.
 
 ### Error boundaries
 
@@ -176,13 +148,14 @@ The product does not function without these.
   panel (*"3 transactions pending: setRate USDC, setRate WBTC,
   setAllowedCollaterals"*) would survive reloads.
 - [ ] **Live HF + utilization.** `RepayModal` recomputes HF locally as the
-  user types (good), but the displayed HF on `MyLoansCard` is the static
-  `loan.healthFactor` from mock data. With real oracles HF moves; the
-  dashboard should subscribe to oracle price updates and re-derive HF live.
+  user types (good), but the displayed HF on `MyLoansCard` is the
+  indexer-derived `healthFactor` (off-chain price feed, stale by minutes).
+  With real oracle prices HF moves; the dashboard should subscribe to
+  oracle updates and re-derive HF live.
 - [ ] **`LenderOrderbook` + market detail chart from real data.**
-  `LenderOrderbook` shows mock depth; `ChartPlaceholder` is hard-coded SVG.
-  Both need indexer-sourced data (positions sliced by rate; market totals
-  over time).
+  `LenderOrderbook` shows mock depth; `ChartPlaceholder` on
+  `/market/[pair]` is hard-coded SVG. Both need indexer-sourced data
+  (positions sliced by rate; market totals over time).
 - [ ] **`BorrowFlowSankey` real data.** `components/market/BorrowFlowSankey.tsx`
   exists; verify it isn't using mocks too.
 
@@ -195,7 +168,7 @@ The product does not function without these.
 - [ ] **Unit tests** for pure utilities:
   - `annualRateToRatePerSecond`, `ratePerSecondToAnnual` in `lib/utils.ts`
   - `healthBand` in `lib/borrower.ts`
-  - `getMarketSlug`, `getMarketByPair` in `lib/markets.ts`
+  - `getMarketSlug` in `lib/markets.ts`
   - All formatters (`formatCompact`, `formatUsd`, `formatPercent`)
 - [ ] **E2E (Playwright)** for critical flows:
   - Connect → activate → set rate → save preferences → pause → resume
@@ -220,6 +193,11 @@ The product does not function without these.
   `app/layout.tsx`. No OG image asset.
 - [ ] Twitter / Discord link previews today are plain text.
 - [ ] Add `public/og-image.png` (1200×630) and wire it.
+- [ ] Restore dynamic per-market `<title>` on `/market/[pair]`. The page is
+  now a client component (drove off `useMarkets()`), so the previous
+  `generateMetadata` was removed. Either split into a thin server wrapper
+  that re-runs `fetchMarkets()` server-side, or add a `/markets/:pair`
+  detail endpoint to keep the client component thin.
 
 ### Sitemap + robots.txt
 
@@ -255,19 +233,20 @@ The product does not function without these.
 
 ## Honest milestone plan
 
-Roughly 4–5 weeks of focused work from today to "production-ready beta":
+Roughly 3–4 weeks of focused work from today to "production-ready beta":
 
 1. **Borrow flow + approvals** (~1 week) — Router.borrow wired, inline
    approval step in `RepayModal` and `BorrowModal`. Unblocks demoing the
    actual product.
-2. **Indexer wire-up + bigint migration** (~1–2 weeks) — replaces every
-   `MOCK_*` and makes the math safe.
-3. **Tx-hash receipts, chain-switch guard, error boundary** (~2 days) —
-   basic polish that removes the worst rough edges.
-4. **Mobile + empty/loading + tooltips** (~3 days) — the "works well"
+2. **Bigint migration + oracle plumbing** (~1 week) — every consumer of
+   amount / rate / HF on `bigint`, oracle threaded into `BorrowerLoan` so
+   repay actually lands.
+3. **Tx-hash receipts, chain-switch guard, error boundary, market
+   creation UI** (~3 days) — basic polish that removes the worst rough edges.
+4. **Mobile + tooltips + dynamic OG title** (~3 days) — the "works well"
    finishing pass.
 5. **Tests + observability + SEO** (~1 week) — pre-launch checklist.
 
-Half the lift is the indexer / bigint migration; the other half is borrow
-+ approvals. Once Tier 1 ships the app is structurally complete — Tiers 2–5
-are increments on a working product.
+Half the lift is borrow + approvals. The other half is the bigint
+migration + market-creation UI. Tier 1 ships the app structurally; Tiers
+2–5 are increments on a working product.

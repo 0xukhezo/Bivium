@@ -74,12 +74,3 @@ export function getMarketById(id: string): Market | undefined {
 export function getMarketSlug(market: Market): string {
   return `${market.collateralToken.symbol}-${market.loanToken.symbol}`.toLowerCase();
 }
-
-export function getMarketByPair(pair: string): Market | undefined {
-  const needle = pair.toLowerCase();
-  return MOCK_MARKETS.find(
-    (m) =>
-      `${m.collateralToken.symbol}-${m.loanToken.symbol}`.toLowerCase() ===
-      needle,
-  );
-}
