@@ -1,5 +1,6 @@
 "use client";
 
+import { TriangleAlert } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { ChainAwareButton } from "@/components/wallet/ChainAwareButton";
@@ -7,6 +8,8 @@ import type { LenderMarket } from "@/lib/lender";
 
 interface MarketStatusModalProps {
   market: LenderMarket | null;
+  /** Current global paused state read from `BiviumProfile.paused`. */
+  isPaused: boolean;
   open: boolean;
   onClose: () => void;
   onConfirm: () => void;
@@ -15,6 +18,7 @@ interface MarketStatusModalProps {
 
 export function MarketStatusModal({
   market,
+  isPaused,
   open,
   onClose,
   onConfirm,
@@ -22,11 +26,13 @@ export function MarketStatusModal({
 }: MarketStatusModalProps) {
   if (!market) return null;
 
-  const pausing = market.status === "active";
-  const title = pausing ? "Pause market" : "Resume market";
+  // Pausing is *the act of pausing*: only meaningful when we're currently
+  // active. If `isPaused`, the only action available is Resume.
+  const pausing = !isPaused;
+  const title = pausing ? "Pause your markets" : "Resume your markets";
   const description = pausing
-    ? "Pausing sets your rate for this loan token to 0 — borrowers can no longer draw new loans against it. Existing positions stay open and keep accruing interest. You can resume at any time."
-    : "Resuming restores your rate for this loan token, reopening the market to new borrows against your liquidity.";
+    ? "Pausing flips the global `paused` flag on your BiviumProfile. New borrows stop across every market you run; existing positions stay open and keep accruing interest. Your rates and accepted-collateral list are preserved."
+    : "Resuming clears the global `paused` flag on your BiviumProfile. Every market you run reopens to new borrows at the rates already on file.";
 
   return (
     <Modal open={open} onClose={submitting ? () => {} : onClose} title={title}>
@@ -55,6 +61,20 @@ export function MarketStatusModal({
       </div>
       <p className="mt-3 text-sm text-text-secondary">{description}</p>
 
+      <div className="mt-4 flex gap-2 rounded-md border border-warn/30 bg-warn/10 p-3 text-xs text-text-secondary">
+        <TriangleAlert
+          size={16}
+          className="mt-0.5 shrink-0 text-warn"
+          aria-hidden="true"
+        />
+        <p>
+          This affects <span className="font-semibold">all</span> your markets,
+          not just {market.collateralToken.symbol} /{" "}
+          {market.loanToken.symbol}. The contract only exposes a profile-wide
+          pause today.
+        </p>
+      </div>
+
       <div className="mt-6 flex gap-3">
         <Button
           variant="secondary"
@@ -75,8 +95,8 @@ export function MarketStatusModal({
           {submitting
             ? "Confirming…"
             : pausing
-              ? "Pause market"
-              : "Resume market"}
+              ? "Pause profile"
+              : "Resume profile"}
         </ChainAwareButton>
       </div>
     </Modal>

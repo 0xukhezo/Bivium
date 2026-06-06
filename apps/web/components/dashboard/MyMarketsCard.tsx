@@ -11,7 +11,11 @@ import {
 } from "@/components/ui/SortableHeader";
 import { MarketStatusModal } from "./MarketStatusModal";
 import { type LenderMarket } from "@/lib/lender";
-import { useSetRate } from "@/hooks/useLenderProfileWrite";
+import {
+  usePauseProfile,
+  useUnpauseProfile,
+} from "@/hooks/useLenderProfileWrite";
+import { useLenderProfile } from "@/hooks/useLenderProfile";
 import { useLenderMarkets } from "@/hooks/useLenderMarkets";
 import { useEmbeddedAddress } from "@/hooks/useEmbeddedAddress";
 import type { Token } from "@/lib/tokens";
@@ -44,71 +48,80 @@ function compare(key: SortKey, a: LenderMarket, b: LenderMarket): number {
   }
 }
 
-// Caveat: setRate is per loan token, so two markets sharing a loanToken
-// pause/resume together until a per-pair kill-switch lands on the contract.
+// `BiviumProfile.pause()` is a single global flag — pausing stops new
+// borrows across **every** market this lender runs (the contract checks
+// `paused` in every supply/borrow path). The per-row Pause/Resume button
+// still triggers the same global op; we surface that clearly in the
+// confirmation modal. Status badges read off the on-chain `paused` flag so
+// all rows toggle in lockstep.
 export function MyMarketsCard() {
   const address = useEmbeddedAddress();
   const query = useLenderMarkets(address);
   const markets = useMemo(() => query.data ?? [], [query.data]);
 
+  const profile = useLenderProfile();
+  const isPaused = profile.paused === true;
+
   const [statusMarket, setStatusMarket] = useState<LenderMarket | null>(null);
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
 
-  const [pendingId, setPendingId] = useState<string | null>(null);
-  const [pendingNextStatus, setPendingNextStatus] = useState<
-    LenderMarket["status"] | null
-  >(null);
-
-  const setRateHook = useSetRate();
-  const isSubmitting = setRateHook.isPending || setRateHook.isConfirming;
+  const pauseHook = usePauseProfile();
+  const unpauseHook = useUnpauseProfile();
+  const isPausing = pauseHook.isPending || pauseHook.isConfirming;
+  const isUnpausing = unpauseHook.isPending || unpauseHook.isConfirming;
+  const isSubmitting = isPausing || isUnpausing;
 
   useEffect(() => {
-    if (!setRateHook.isSuccess || !pendingId || !pendingNextStatus) return;
-    const targetMarket = markets.find((m) => m.id === pendingId);
-    setStatusMarket(null);
-    setPendingId(null);
-    setPendingNextStatus(null);
-    setRateHook.reset();
-    // Refetch so the new pause/active status comes from the indexer.
+    if (!pauseHook.isSuccess) return;
+    profile.refetch();
     query.refetch();
-    if (targetMarket) {
-      const pairLabel = `${targetMarket.collateralToken.symbol} / ${targetMarket.loanToken.symbol}`;
-      toast.success(
-        pendingNextStatus === "paused"
-          ? `${pairLabel} paused`
-          : `${pairLabel} resumed`,
-        {
-          description:
-            pendingNextStatus === "paused"
-              ? "New borrows are stopped. Existing positions stay open."
-              : `Rate restored to ${(targetMarket.ratePerSecond * 100).toFixed(2)}%.`,
-        },
-      );
-    }
-  }, [setRateHook.isSuccess, pendingId, pendingNextStatus, setRateHook, markets, query]);
+    setStatusMarket(null);
+    pauseHook.reset();
+    toast.success("Profile paused", {
+      description:
+        "All your markets stopped accepting new borrows. Existing positions stay open.",
+    });
+  }, [pauseHook.isSuccess, pauseHook, profile, query]);
 
   useEffect(() => {
-    if (!setRateHook.error) return;
-    setPendingId(null);
-    setPendingNextStatus(null);
-    toast.error("Transaction failed", {
-      description: humanizeError(setRateHook.error),
+    if (!unpauseHook.isSuccess) return;
+    profile.refetch();
+    query.refetch();
+    setStatusMarket(null);
+    unpauseHook.reset();
+    toast.success("Profile resumed", {
+      description: "All your markets are open to new borrows again.",
     });
-  }, [setRateHook.error]);
+  }, [unpauseHook.isSuccess, unpauseHook, profile, query]);
+
+  useEffect(() => {
+    if (!pauseHook.error) return;
+    toast.error("Pause failed", { description: humanizeError(pauseHook.error) });
+    pauseHook.reset();
+  }, [pauseHook.error, pauseHook]);
+
+  useEffect(() => {
+    if (!unpauseHook.error) return;
+    toast.error("Resume failed", {
+      description: humanizeError(unpauseHook.error),
+    });
+    unpauseHook.reset();
+  }, [unpauseHook.error, unpauseHook]);
 
   const handleConfirm = () => {
-    if (!statusMarket) return;
-    const willPause = statusMarket.status === "active";
-    const targetRate = willPause ? 0 : statusMarket.ratePerSecond;
-    setPendingId(statusMarket.id);
-    setPendingNextStatus(willPause ? "paused" : "active");
-    setRateHook.setRate(statusMarket.loanToken.address, targetRate);
+    if (isSubmitting) return;
+    if (isPaused) {
+      unpauseHook.unpause();
+    } else {
+      pauseHook.pause();
+    }
   };
 
   const handleClose = () => {
     if (isSubmitting) return;
     setStatusMarket(null);
-    setRateHook.reset();
+    pauseHook.reset();
+    unpauseHook.reset();
   };
 
   const handleSort = (key: SortKey) => setSort((prev) => nextSort(prev, key));
@@ -235,29 +248,27 @@ export function MyMarketsCard() {
                       </td>
                       <td className="px-4 py-4">
                         <Badge
-                          variant={
-                            m.status === "active" ? "success" : "neutral"
-                          }
+                          variant={isPaused ? "neutral" : "success"}
                         >
-                          {m.status === "active" ? "Active" : "Paused"}
+                          {isPaused ? "Paused" : "Active"}
                         </Badge>
                       </td>
                       <td className="w-32 px-4 py-4 text-right">
                         <button
                           type="button"
                           onClick={() => setStatusMarket(m)}
-                          disabled={isSubmitting}
+                          disabled={isSubmitting || profile.pausedLoading}
                           className="inline-flex h-9 w-28 items-center justify-center gap-1.5 rounded-md border border-border bg-bg px-3 text-sm font-medium text-text-secondary transition-colors duration-base ease-out-expo hover:border-accent hover:text-text-primary disabled:pointer-events-none disabled:opacity-50"
                         >
-                          {m.status === "active" ? (
-                            <>
-                              <Pause size={14} aria-hidden="true" />
-                              <span>Pause</span>
-                            </>
-                          ) : (
+                          {isPaused ? (
                             <>
                               <Play size={14} aria-hidden="true" />
                               <span>Resume</span>
+                            </>
+                          ) : (
+                            <>
+                              <Pause size={14} aria-hidden="true" />
+                              <span>Pause</span>
                             </>
                           )}
                         </button>
@@ -273,6 +284,7 @@ export function MyMarketsCard() {
 
       <MarketStatusModal
         market={statusMarket}
+        isPaused={isPaused}
         open={statusMarket !== null}
         onClose={handleClose}
         onConfirm={handleConfirm}
