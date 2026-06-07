@@ -111,6 +111,7 @@ function adaptPosition(
     lltv,
     healthFactor: position.healthFactor,
     lender: position.lender,
+    oracle: position.oracle as `0x${string}`,
   };
 }
 

@@ -2,10 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { TriangleAlert } from "lucide-react";
+import { parseUnits } from "viem";
 import { Modal } from "@/components/ui/Modal";
 import { ChainAwareButton } from "@/components/wallet/ChainAwareButton";
 import { healthBand, type BorrowerLoan } from "@/lib/borrower";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
+import { useTokenAllowance } from "@/hooks/useTokenAllowance";
+import { useApprove } from "@/hooks/useApprove";
+import { CONTRACT_ADDRESSES } from "@/lib/contracts/addresses";
+import { toast } from "@/lib/toast";
+import { humanizeError } from "@/lib/errors";
 import { formatCompact, formatUsd } from "@/lib/utils";
 
 interface RepayModalProps {
@@ -35,6 +41,7 @@ export function RepayModal({
   submitting,
 }: RepayModalProps) {
   const [amountInput, setAmountInput] = useState("");
+  const routerAddress = CONTRACT_ADDRESSES.router;
 
   useEffect(() => {
     if (open) setAmountInput("");
@@ -45,6 +52,33 @@ export function RepayModal({
     isLoading: balanceLoading,
     isConnected,
   } = useTokenBalance(loan?.loanToken);
+
+  // Loan-token allowance for the Router. Router pulls the repay amount
+  // from msg.sender via ERC-20 `transferFrom`, so the user must approve
+  // first or every real `repay()` reverts.
+  const allowance = useTokenAllowance(loan?.loanToken, routerAddress);
+  const approveHook = useApprove(loan?.loanToken, routerAddress);
+  const approving = approveHook.isPending || approveHook.isConfirming;
+
+  useEffect(() => {
+    if (!approveHook.isSuccess) return;
+    allowance.refetch();
+    toast.success(
+      loan ? `${loan.loanToken.symbol} approved` : "Token approved",
+      {
+        description: "The router can now pull funds to settle this repay.",
+      },
+    );
+    approveHook.reset();
+  }, [approveHook.isSuccess, approveHook, allowance, loan]);
+
+  useEffect(() => {
+    if (!approveHook.error) return;
+    toast.error("Approval failed", {
+      description: humanizeError(approveHook.error),
+    });
+    approveHook.reset();
+  }, [approveHook.error, approveHook]);
 
   if (!loan) return null;
 
@@ -67,7 +101,7 @@ export function RepayModal({
       ? (loan.collateral.usd * loan.lltv) / remainingUsd
       : Number.POSITIVE_INFINITY;
 
-  const valid = amount > 0 && !exceedsBalance;
+  const valid = amount > 0 && !exceedsBalance && !!routerAddress;
 
   const balanceKnown = isConnected && !balanceLoading;
   const insufficientForFull = balanceKnown && walletBalance < debtAmount - 1e-9;
@@ -78,6 +112,29 @@ export function RepayModal({
       ? "You're repaying only part of your debt, so a remaining borrowing position will stay open in your dashboard."
       : null;
 
+  // Base-unit amount the Router will pull. Round UP by one base unit so
+  // FP→bigint quantisation never under-approves and the repay reverts.
+  const amountWei = (() => {
+    if (amount <= 0) return 0n;
+    try {
+      const dust = 10 ** -loan.loanToken.decimals;
+      return parseUnits(
+        (amount + dust).toFixed(loan.loanToken.decimals),
+        loan.loanToken.decimals,
+      );
+    } catch {
+      return 0n;
+    }
+  })();
+
+  const needsApproval =
+    !!routerAddress &&
+    amountWei > 0n &&
+    !allowance.isLoading &&
+    allowance.allowance < amountWei;
+
+  const busy = submitting || approving;
+
   const setAmount = (value: number) =>
     setAmountInput(String(Math.round(value * 1e8) / 1e8));
 
@@ -85,7 +142,11 @@ export function RepayModal({
   const handleMaxDebt = () => setAmount(debtAmount);
 
   const handleConfirm = () => {
-    if (!valid || submitting) return;
+    if (!valid || busy) return;
+    if (needsApproval) {
+      approveHook.approve(amountWei);
+      return;
+    }
     onConfirm(amount);
   };
 
@@ -200,15 +261,23 @@ export function RepayModal({
         size="lg"
         className="mt-6 w-full"
         onClick={handleConfirm}
-        disabled={!valid || submitting}
+        disabled={!valid || busy}
       >
-        {submitting
-          ? "Confirming…"
-          : amount <= 0
-            ? "Enter an amount"
-            : exceedsBalance
-              ? "Insufficient balance"
-              : `Repay ${loan.loanToken.symbol}`}
+        {!routerAddress
+          ? "Router not configured"
+          : approving
+            ? approveHook.isConfirming
+              ? "Confirming approval…"
+              : "Sign approval…"
+            : submitting
+              ? "Confirming…"
+              : amount <= 0
+                ? "Enter an amount"
+                : exceedsBalance
+                  ? "Insufficient balance"
+                  : needsApproval
+                    ? `Approve ${loan.loanToken.symbol}`
+                    : `Repay ${loan.loanToken.symbol}`}
       </ChainAwareButton>
     </Modal>
   );

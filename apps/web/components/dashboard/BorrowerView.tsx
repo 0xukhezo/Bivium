@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { parseUnits } from "viem";
 import { Card } from "@/components/ui/Card";
 import { type BorrowerLoan } from "@/lib/borrower";
 import { BorrowerSummary } from "./BorrowerSummary";
@@ -13,20 +15,14 @@ import { annualRateToRatePerSecond } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { humanizeError } from "@/lib/errors";
 
-// TODO(indexer-wire-up): real oracle from positions ⋈ markets join.
-const ORACLE_PLACEHOLDER: `0x${string}` = `0x${"0".repeat(40)}`;
-
-function toBaseUnits(amount: number, decimals: number): bigint {
-  return BigInt(Math.round(amount * 10 ** decimals));
-}
-
 function buildRepayItem(loan: BorrowerLoan, amount: number): RepayItem {
-  const assets = toBaseUnits(amount, loan.loanToken.decimals);
+  // parseUnits handles decimal→base-unit conversion safely (no FP noise).
+  const assets = parseUnits(amount.toString(), loan.loanToken.decimals);
   return {
     params: {
       loanToken: loan.loanToken.address,
       collateralToken: loan.collateralToken.address,
-      oracle: ORACLE_PLACEHOLDER,
+      oracle: loan.oracle,
       ratePerSecond: annualRateToRatePerSecond(loan.ratePerSecond),
       lltv: BigInt(Math.round(loan.lltv * 1e18)),
       creator: loan.lender as `0x${string}`,
@@ -40,6 +36,7 @@ function buildRepayItem(loan: BorrowerLoan, amount: number): RepayItem {
 export function BorrowerView() {
   const address = useEmbeddedAddress();
   const query = useBorrowerLoans(address);
+  const queryClient = useQueryClient();
   const loans = useMemo(() => query.data ?? [], [query.data]);
 
   const [repayLoan, setRepayLoan] = useState<BorrowerLoan | null>(null);
@@ -73,6 +70,11 @@ export function BorrowerView() {
     // Refetch from indexer instead of optimistic mutation — the indexer is
     // the source of truth for borrowShares, debtAmount, and healthFactor.
     query.refetch();
+    // Closing/reducing a position changes lender depth + market totals, so
+    // invalidate those caches too. The dashboard markets card and the
+    // /market/[pair] depth chart will pick up the change on next render.
+    queryClient.invalidateQueries({ queryKey: ["market-depth"] });
+    queryClient.invalidateQueries({ queryKey: ["markets"] });
 
     toast.success(
       closing ? `${loan.loanToken.symbol} loan closed` : "Loan repaid",
@@ -86,7 +88,7 @@ export function BorrowerView() {
     setRepayLoan(null);
     pendingAmountRef.current = 0;
     repayHook.reset();
-  }, [repayHook.isSuccess, repayLoan, repayHook, query]);
+  }, [repayHook.isSuccess, repayLoan, repayHook, query, queryClient]);
 
   useEffect(() => {
     if (!repayHook.error) return;
