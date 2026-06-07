@@ -21,6 +21,7 @@ import { useEmbeddedAddress } from "@/hooks/useEmbeddedAddress";
 import type { Token } from "@/lib/tokens";
 import { formatCompact, formatPercent, formatUsd } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { txAction } from "@/lib/explorer";
 import { humanizeError } from "@/lib/errors";
 
 type SortKey =
@@ -73,6 +74,7 @@ export function MyMarketsCard() {
 
   useEffect(() => {
     if (!pauseHook.isSuccess) return;
+    const hash = pauseHook.hash;
     profile.refetch();
     query.refetch();
     setStatusMarket(null);
@@ -80,17 +82,20 @@ export function MyMarketsCard() {
     toast.success("Profile paused", {
       description:
         "All your markets stopped accepting new borrows. Existing positions stay open.",
+      action: txAction(hash),
     });
   }, [pauseHook.isSuccess, pauseHook, profile, query]);
 
   useEffect(() => {
     if (!unpauseHook.isSuccess) return;
+    const hash = unpauseHook.hash;
     profile.refetch();
     query.refetch();
     setStatusMarket(null);
     unpauseHook.reset();
     toast.success("Profile resumed", {
       description: "All your markets are open to new borrows again.",
+      action: txAction(hash),
     });
   }, [unpauseHook.isSuccess, unpauseHook, profile, query]);
 

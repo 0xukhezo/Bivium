@@ -13,6 +13,7 @@ import { useProfileDelegation } from "@/hooks/useProfileDelegation";
 import { useEmbeddedAddress } from "@/hooks/useEmbeddedAddress";
 import { truncateAddress } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { txAction } from "@/lib/explorer";
 import { humanizeError } from "@/lib/errors";
 
 interface OnboardingModalProps {
@@ -34,10 +35,11 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
     if (!activation.isSuccess) return;
     toast.success("bivium activated", {
       description: "Your wallet is now delegated to the Bivium Profile.",
+      action: txAction(activation.hash),
     });
     delegation.refetch();
     onClose();
-  }, [activation.isSuccess, delegation, onClose]);
+  }, [activation.isSuccess, activation.hash, delegation, onClose]);
 
   useEffect(() => {
     if (!activation.error) return;

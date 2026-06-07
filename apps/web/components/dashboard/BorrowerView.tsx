@@ -13,6 +13,7 @@ import { useBorrowerLoans } from "@/hooks/useBorrowerLoans";
 import { useEmbeddedAddress } from "@/hooks/useEmbeddedAddress";
 import { annualRateToRatePerSecond } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { txAction } from "@/lib/explorer";
 import { humanizeError } from "@/lib/errors";
 
 function buildRepayItem(loan: BorrowerLoan, amount: number): RepayItem {
@@ -67,6 +68,7 @@ export function BorrowerView() {
     const debtAmount = loan.principal.amount + loan.accruedInterest.amount;
     const closing = amount >= debtAmount - 1e-9;
 
+    const hash = repayHook.hash;
     // Refetch from indexer instead of optimistic mutation — the indexer is
     // the source of truth for borrowShares, debtAmount, and healthFactor.
     query.refetch();
@@ -82,6 +84,7 @@ export function BorrowerView() {
         description: closing
           ? "Collateral unlocked."
           : `${amount.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${loan.loanToken.symbol} returned to lender.`,
+        action: txAction(hash),
       },
     );
 

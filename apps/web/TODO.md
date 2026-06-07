@@ -41,23 +41,12 @@ The product does not function without these.
 
 ## Tier 2 — UX-blocking gaps
 
-- [ ] **Tx-hash receipts.** Every successful write toast should include
-  `action: { label: "View on Arbiscan", onClick: () => window.open(\`https://arbiscan.io/tx/${hash}\`) }`.
-  The toast system already supports it; just thread the `hash` through.
-  Touches: `MyMarketsCard`, `LendingAssetsCard`, `CollateralAssetsCard`,
-  `BorrowerView`, `BorrowModal`, `OnboardingModal`.
-
 - [ ] **Global chain-switch guard.** `ChainAwareButton` covers individual
   buttons but there's no app-wide banner. Wrong-chain users on
   `/dashboard` or `/market/[pair]` get cryptic wagmi errors from read
   paths. Add a banner: *"You're on Ethereum mainnet. Switch to Arbitrum to
   continue."* with a `switchChain` CTA in `AppHeader` or a layout-level
   component.
-
-- [ ] **EIP-7702 revocation.** No way to undelegate today. Add a
-  "Deactivate my bivium" button (settings dropdown or Lender-tab footer)
-  that signs an authorization for `address(0)` via the existing 7702
-  plumbing.
 
 - [ ] **Borrower deposit / withdraw collateral.**
   - [ ] `BiviumProfile.sol` exposes `withdrawFromMarket(MarketParams, amount)`

@@ -10,6 +10,7 @@ import { useLenderRates } from "@/hooks/useLenderProfile";
 import type { Token } from "@/lib/tokens";
 import { cn, ratePerSecondToAnnual } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { txAction } from "@/lib/explorer";
 import { humanizeError } from "@/lib/errors";
 
 function sameAddress(a: string, b: string) {
@@ -191,6 +192,10 @@ export function LendingAssetsCard() {
       );
     }
 
+    // Capture the last successful tx hash before `reset()` clears it so we
+    // can surface it on the final success toast. Multi-tx flows (saving
+    // several rates in one click) link to the last tx in the batch.
+    const lastHash = setRateHook.hash;
     setRateHook.reset();
     const nextIndex = opIndex + 1;
     if (nextIndex >= opsQueue.length) {
@@ -204,6 +209,7 @@ export function LendingAssetsCard() {
           count === 1
             ? "1 rate update confirmed on-chain."
             : `${count} rate updates confirmed on-chain.`,
+        action: txAction(lastHash),
       });
     } else {
       setOpIndex(nextIndex);

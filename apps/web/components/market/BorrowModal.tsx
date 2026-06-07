@@ -16,6 +16,7 @@ import { useTokenAllowance } from "@/hooks/useTokenAllowance";
 import { useApprove } from "@/hooks/useApprove";
 import { useBorrow, type BorrowOrder } from "@/hooks/useBiviumRouterWrite";
 import { toast } from "@/lib/toast";
+import { txAction } from "@/lib/explorer";
 import { humanizeError } from "@/lib/errors";
 import {
   annualRateToRatePerSecond,
@@ -227,9 +228,11 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
   // Approve landed → refetch allowance so the button flips to "Borrow".
   useEffect(() => {
     if (!approveHook.isSuccess) return;
+    const hash = approveHook.hash;
     allowance.refetch();
     toast.success(`${collateralToken.symbol} approved`, {
       description: `The router can now pull collateral for this borrow.`,
+      action: txAction(hash),
     });
     approveHook.reset();
   }, [approveHook.isSuccess, approveHook, allowance, collateralToken.symbol]);
@@ -246,12 +249,14 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
   // close.
   useEffect(() => {
     if (!borrowHook.isSuccess) return;
+    const hash = borrowHook.hash;
     toast.success(
       `Borrowed ${formatTokenAmount(requestedSafe, {
         decimals: Math.min(loanToken.decimals, 6),
       })} ${loanToken.symbol}`,
       {
         description: `Repay any time from the dashboard.`,
+        action: txAction(hash),
       },
     );
     queryClient.invalidateQueries({ queryKey: ["borrower-loans"] });
@@ -492,11 +497,7 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
           value={formatPercent(walk.weightedAvgRate)}
         />
         <Divider />
-        <SummaryRow
-          label="LLTV"
-          value={formatPercent(lltv)}
-          sub={`At HF 1.0, ${formatUsd(borrowUsd / Math.max(lltv, 1e-9))} of collateral required`}
-        />
+        <SummaryRow label="LLTV" value={formatPercent(lltv)} />
       </div>
 
       <ChainAwareButton

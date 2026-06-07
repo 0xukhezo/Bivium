@@ -10,6 +10,7 @@ import { LendingAssetsCard } from "./LendingAssetsCard";
 import { CollateralAssetsCard } from "./CollateralAssetsCard";
 import { BorrowerView } from "./BorrowerView";
 import { ActivateProfileCard } from "./ActivateProfileCard";
+import { DeactivateProfileCard } from "./DeactivateProfileCard";
 import { DashboardSkeleton } from "./DashboardSkeleton";
 import { useProfileDelegation } from "@/hooks/useProfileDelegation";
 import { cn } from "@/lib/utils";
@@ -112,6 +113,7 @@ export function DashboardView() {
                   <LendingAssetsCard />
                   <CollateralAssetsCard />
                 </div>
+                <DeactivateProfileCard />
               </div>
             )
           ) : (

@@ -17,7 +17,7 @@ type Status =
   | "success"
   | "error";
 
-// EIP-7702 self-sponsored activation. See lib/privy-local-account.ts for the
+// EIP-7702 set-code activation. See lib/privy-local-account.ts for the
 // reason we hand-build the viem account instead of using Privy's
 // `toViemAccount` (its bundled transaction serializer rejects type-4 in
 // SDK 3.29 / @privy-io/ethereum 0.1.4).
@@ -26,7 +26,26 @@ const arbitrumRpc = alchemyKey
   ? `https://arb-mainnet.g.alchemy.com/v2/${alchemyKey}`
   : undefined;
 
-export function useActivateProfile() {
+const ZERO_ADDRESS = `0x${"0".repeat(40)}` as const;
+
+interface UseActivateProfileOptions {
+  /**
+   * Authorisation target. Defaults to the configured BiviumProfile address
+   * (= activate). Pass `0x000…0` to revoke the existing delegation.
+   */
+  targetAddress?: Hex;
+  /**
+   * Calldata for the inner self-call. Defaults to `paused()` — a no-op
+   * view call on BiviumProfile that wakes the contract dispatcher (without
+   * which the type-4 tx reverts during gas estimation because the profile
+   * has no payable fallback). For revocation we send empty data: there's
+   * no contract code at the EOA after revoke, so the call just succeeds as
+   * a plain transfer-zero.
+   */
+  selfCallData?: Hex;
+}
+
+export function useActivateProfile(opts: UseActivateProfileOptions = {}) {
   const { wallets } = useWallets();
   const publicClient = usePublicClient({ chainId: arbitrum.id });
   const profileAddress = CONTRACT_ADDRESSES.profile;
@@ -64,6 +83,15 @@ export function useActivateProfile() {
       return;
     }
 
+    const target = opts.targetAddress ?? profileAddress;
+    const callData =
+      opts.selfCallData ??
+      encodeFunctionData({
+        abi: BiviumProfileAbi,
+        functionName: "paused",
+      });
+    const isRevoke = target.toLowerCase() === ZERO_ADDRESS.toLowerCase();
+
     try {
       const account = createPrivyLocalAccount(embedded);
       const walletClient = createWalletClient({
@@ -74,22 +102,18 @@ export function useActivateProfile() {
 
       setStatus("signing");
       const authorization = await walletClient.signAuthorization({
-        contractAddress: profileAddress,
+        contractAddress: target,
         executor: "self",
       });
 
       setStatus("broadcasting");
-      // BiviumProfile has no payable fallback / receive(), so an empty-data
-      // self-call would revert during `eth_estimateGas` (which simulates with
-      // the delegation already applied). `paused()` is a view function that
-      // exists in the ABI — installs the delegation and exits cleanly.
       const txHash = await walletClient.sendTransaction({
         authorizationList: [authorization],
         to: account.address,
-        data: encodeFunctionData({
-          abi: BiviumProfileAbi,
-          functionName: "paused",
-        }),
+        // Revoking: there's no profile code at the EOA post-revoke, so the
+        // dispatcher trick isn't needed (and would revert). Send empty
+        // calldata — a plain self-call.
+        data: isRevoke ? "0x" : callData,
       });
       setHash(txHash);
 
@@ -102,7 +126,13 @@ export function useActivateProfile() {
       setError(e);
       setStatus("error");
     }
-  }, [wallets, profileAddress, publicClient]);
+  }, [
+    wallets,
+    profileAddress,
+    publicClient,
+    opts.targetAddress,
+    opts.selfCallData,
+  ]);
 
   const isPending =
     status === "signing" ||
@@ -118,4 +148,13 @@ export function useActivateProfile() {
     isPending,
     isSuccess: status === "success",
   };
+}
+
+/**
+ * Revoke the EIP-7702 delegation by signing an authorisation pointing at
+ * `address(0)`. After confirmation, `getCode(eoa)` returns `0x` and the
+ * EOA is back to behaving like a plain EOA.
+ */
+export function useDeactivateProfile() {
+  return useActivateProfile({ targetAddress: ZERO_ADDRESS });
 }

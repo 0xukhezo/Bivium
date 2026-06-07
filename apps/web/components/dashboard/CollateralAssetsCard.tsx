@@ -10,6 +10,7 @@ import { useLenderProfile } from "@/hooks/useLenderProfile";
 import type { Token } from "@/lib/tokens";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { txAction } from "@/lib/explorer";
 import { humanizeError } from "@/lib/errors";
 
 function sameAddress(a: string, b: string) {
@@ -86,6 +87,7 @@ export function CollateralAssetsCard() {
 
   useEffect(() => {
     if (!writeHook.isSuccess) return;
+    const hash = writeHook.hash;
     profile.refetch();
     writeHook.reset();
     toast.success("Accepted collateral updated", {
@@ -93,6 +95,7 @@ export function CollateralAssetsCard() {
         draft.length === 0
           ? "Collateral list is empty — no new borrows possible until you re-enable one."
           : `${draft.length} ${draft.length === 1 ? "token" : "tokens"} accepted as collateral.`,
+      action: txAction(hash),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [writeHook.isSuccess]);

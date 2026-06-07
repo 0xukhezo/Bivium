@@ -11,6 +11,7 @@ import { useTokenAllowance } from "@/hooks/useTokenAllowance";
 import { useApprove } from "@/hooks/useApprove";
 import { CONTRACT_ADDRESSES } from "@/lib/contracts/addresses";
 import { toast } from "@/lib/toast";
+import { txAction } from "@/lib/explorer";
 import { humanizeError } from "@/lib/errors";
 import { formatCompact, formatUsd } from "@/lib/utils";
 
@@ -62,11 +63,13 @@ export function RepayModal({
 
   useEffect(() => {
     if (!approveHook.isSuccess) return;
+    const hash = approveHook.hash;
     allowance.refetch();
     toast.success(
       loan ? `${loan.loanToken.symbol} approved` : "Token approved",
       {
         description: "The router can now pull funds to settle this repay.",
+        action: txAction(hash),
       },
     );
     approveHook.reset();
