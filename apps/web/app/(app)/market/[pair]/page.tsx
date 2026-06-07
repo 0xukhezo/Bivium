@@ -12,8 +12,9 @@ import { useMarketDepth } from "@/hooks/useMarketDepth";
 import { useMarkets } from "@/hooks/useMarkets";
 import { getMarketSlug, type Market } from "@/lib/markets";
 import {
-  formatCompact,
+  fixedPointToFraction,
   formatPercent,
+  formatTokenBalance,
   formatUsd,
   truncateAddress,
 } from "@/lib/utils";
@@ -166,9 +167,9 @@ function MarketDetail({ market }: { market: Market }) {
 }
 
 function utilization(market: Market): number {
-  return market.totalSupplyAssets.usd > 0
-    ? market.totalBorrowAssets.usd / market.totalSupplyAssets.usd
-    : 0;
+  const supply = market.totalSupplyAssets.usd ?? 0;
+  const borrow = market.totalBorrowAssets.usd ?? 0;
+  return supply > 0 ? borrow / supply : 0;
 }
 
 function StatsPanel({ market }: { market: Market }) {
@@ -224,15 +225,26 @@ function StatsPanel({ market }: { market: Market }) {
         <div className="flex flex-col gap-5">
           <StatRow
             label="Total liquidity"
-            value={`${formatCompact(market.totalSupplyAssets.amount)} ${loanToken.symbol}`}
-            sub={formatUsd(market.totalSupplyAssets.usd)}
+            value={`${formatTokenBalance(market.totalSupplyAssets.amount, loanToken.decimals, { compact: true })} ${loanToken.symbol}`}
+            sub={
+              market.totalSupplyAssets.usd !== null
+                ? formatUsd(market.totalSupplyAssets.usd)
+                : undefined
+            }
           />
           <StatRow
             label="Total borrowed"
-            value={`${formatCompact(market.totalBorrowAssets.amount)} ${loanToken.symbol}`}
-            sub={formatUsd(market.totalBorrowAssets.usd)}
+            value={`${formatTokenBalance(market.totalBorrowAssets.amount, loanToken.decimals, { compact: true })} ${loanToken.symbol}`}
+            sub={
+              market.totalBorrowAssets.usd !== null
+                ? formatUsd(market.totalBorrowAssets.usd)
+                : undefined
+            }
           />
-          <StatRow label="LLTV" value={formatPercent(market.lltv)} />
+          <StatRow
+            label="LLTV"
+            value={formatPercent(fixedPointToFraction(market.lltv))}
+          />
           <StatRow label="Utilization" value={formatPercent(util)} />
         </div>
       </Card>

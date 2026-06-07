@@ -4,17 +4,14 @@ import { API_BASE } from "./client";
 
 export interface DepthStep {
   lender: `0x${string}`;
-  /** Annualised rate, 0–1 fraction. */
+  /** Annualised rate, 0–1 fraction. Display only. */
   apy: number;
-  /**
-   * 1e18 fixed-point ratePerSecond, kept raw for contract calls (the
-   * Router's BorrowOrder.candidates wants this exact bigint).
-   */
+  /** 1e18 fixed-point ratePerSecond. Use for contract calls. */
   ratePerSecondRaw: bigint;
-  /** Lender size in loan-token base units, decoded to a JS number. */
-  sizeAmount: number;
+  /** Lender size in loan-token base units. */
+  sizeAmount: bigint;
   sizeUsd: number | null;
-  cumulativeAmount: number;
+  cumulativeAmount: bigint;
   cumulativeUsd: number | null;
   cumulativeAvgApy: number | null;
 }
@@ -22,9 +19,10 @@ export interface DepthStep {
 export interface MarketDepth {
   collateral: Token;
   loan: Token;
-  /** LLTV as a 0–1 fraction. */
-  lltv: number;
-  totalAvailable: number;
+  /** 1e18 fixed-point loan-to-value cap. */
+  lltv: bigint;
+  /** Total fillable depth in loan-token base units. */
+  totalAvailable: bigint;
   totalAvailableUsd: number | null;
   steps: DepthStep[];
 }
@@ -90,21 +88,20 @@ export async function fetchMarketDepth(
 function adapt(d: ApiDepthData): MarketDepth {
   const loanToken = adaptToken(d.loan);
   const collateralToken = adaptToken(d.collateral);
-  const denom = 10 ** loanToken.decimals;
 
   return {
     collateral: collateralToken,
     loan: loanToken,
-    lltv: Number(BigInt(d.lltv)) / 1e18,
-    totalAvailable: Number(BigInt(d.totalAvailable)) / denom,
+    lltv: BigInt(d.lltv),
+    totalAvailable: BigInt(d.totalAvailable),
     totalAvailableUsd: d.totalAvailableUsd,
     steps: d.steps.map((s) => ({
       lender: s.lender as `0x${string}`,
       apy: s.apy,
       ratePerSecondRaw: BigInt(s.ratePerSecond),
-      sizeAmount: Number(BigInt(s.size)) / denom,
+      sizeAmount: BigInt(s.size),
       sizeUsd: s.sizeUsd,
-      cumulativeAmount: Number(BigInt(s.cumulativeSize)) / denom,
+      cumulativeAmount: BigInt(s.cumulativeSize),
       cumulativeUsd: s.cumulativeSizeUsd,
       cumulativeAvgApy: s.cumulativeAvgApy,
     })),

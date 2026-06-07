@@ -3,8 +3,9 @@
 import { useMarketDepth } from "@/hooks/useMarketDepth";
 import type { Token } from "@/lib/tokens";
 import {
+  baseUnitsToNumber,
   formatPercent,
-  formatTokenAmount,
+  formatTokenBalance,
   truncateAddress,
 } from "@/lib/utils";
 import { humanizeError } from "@/lib/errors";
@@ -51,8 +52,16 @@ export function LenderOrderbook({
     );
   }
 
-  const totalDepth =
-    steps.length > 0 ? steps[steps.length - 1].cumulativeAmount : 0;
+  // For the depth-bar width we only need the proportion of each step's
+  // cumulative to the final total — convert via `baseUnitsToNumber` once.
+  // Display amounts use `formatTokenBalance` straight off the bigint.
+  const totalDepthFloat =
+    steps.length > 0
+      ? baseUnitsToNumber(
+          steps[steps.length - 1].cumulativeAmount,
+          loanToken.decimals,
+        )
+      : 0;
   const amountDecimals = Math.min(loanToken.decimals, 6);
 
   return (
@@ -65,8 +74,12 @@ export function LenderOrderbook({
       </div>
       <div className="flex flex-col gap-0.5">
         {steps.map((step, i) => {
+          const cumFloat = baseUnitsToNumber(
+            step.cumulativeAmount,
+            loanToken.decimals,
+          );
           const depthPct =
-            totalDepth > 0 ? (step.cumulativeAmount / totalDepth) * 100 : 0;
+            totalDepthFloat > 0 ? (cumFloat / totalDepthFloat) * 100 : 0;
           const delay = `${i * 35}ms`;
           return (
             <div
@@ -93,13 +106,13 @@ export function LenderOrderbook({
                 {formatPercent(step.apy)}
               </span>
               <span className="relative text-right text-text-primary">
-                {formatTokenAmount(step.sizeAmount, {
-                  decimals: amountDecimals,
+                {formatTokenBalance(step.sizeAmount, loanToken.decimals, {
+                  maxDecimals: amountDecimals,
                 })}
               </span>
               <span className="relative text-right text-text-muted">
-                {formatTokenAmount(step.cumulativeAmount, {
-                  decimals: amountDecimals,
+                {formatTokenBalance(step.cumulativeAmount, loanToken.decimals, {
+                  maxDecimals: amountDecimals,
                 })}
               </span>
             </div>

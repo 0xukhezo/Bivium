@@ -79,36 +79,26 @@ function adaptPosition(
   const collateralToken = adaptToken(row.collateral);
   const loanToken = adaptToken(row.loan);
 
-  const lltv = Number(BigInt(row.lltv)) / 1e18;
-  const collateralAmount =
-    Number(BigInt(position.collateralAmount)) / 10 ** collateralToken.decimals;
-  const debtAmount =
-    Number(BigInt(position.debtAmount)) / 10 ** loanToken.decimals;
-  // borrowShares is raw indexer accounting; Number() may lose precision on
-  // huge values but it's only used for ratio math in the optimistic UI repay
-  // step, which we'll replace once writes go through the router.
-  const borrowSharesNum = Number(BigInt(position.borrowShares));
-
   return {
     id: `${row.pairKey}-${position.marketId}`,
     marketId: position.marketId as `0x${string}`,
     collateralToken,
     loanToken,
     collateral: {
-      amount: collateralAmount,
-      usd: position.collateralUsd ?? 0,
+      amount: BigInt(position.collateralAmount),
+      usd: position.collateralUsd,
     },
-    borrowShares: borrowSharesNum,
-    // The DTO folds principal + accrued into `debtAmount`. Put it all in
-    // `principal` and zero `accruedInterest` — the UI sums both fields, so
-    // totals stay correct and the legacy fields keep working.
+    borrowShares: BigInt(position.borrowShares),
+    // The DTO folds principal + accrued into `debtAmount`. We surface it
+    // as `principal` and zero `accruedInterest` — UI sums both fields, so
+    // totals stay correct and legacy fields keep working.
     principal: {
-      amount: debtAmount,
-      usd: position.debtUsd ?? 0,
+      amount: BigInt(position.debtAmount),
+      usd: position.debtUsd,
     },
-    accruedInterest: { amount: 0, usd: 0 },
-    ratePerSecond: position.apy,
-    lltv,
+    accruedInterest: { amount: 0n, usd: 0 },
+    ratePerSecond: BigInt(position.ratePerSecond),
+    lltv: BigInt(row.lltv),
     healthFactor: position.healthFactor,
     lender: position.lender,
     oracle: position.oracle as `0x${string}`,

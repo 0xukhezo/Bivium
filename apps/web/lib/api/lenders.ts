@@ -1,6 +1,7 @@
 import { arbitrum } from "wagmi/chains";
 import type { LenderMarket } from "@/lib/lender";
 import { getTokenByAddress, type Token } from "@/lib/tokens";
+import { annualRateToRatePerSecond } from "@/lib/utils";
 import { API_BASE } from "./client";
 
 interface ApiLenderMarketsResponse {
@@ -60,26 +61,22 @@ function adaptRow(row: ApiLenderMarketRow, creator: string): LenderMarket {
   const collateralToken = adaptToken(row.collateral);
   const loanToken = adaptToken(row.loan);
 
-  const lltv = Number(BigInt(row.lltv)) / 1e18;
-  const collateralAmount =
-    Number(BigInt(row.collateralAmount)) / 10 ** collateralToken.decimals;
-  const onLoanAmount =
-    Number(BigInt(row.onLoanAmount)) / 10 ** loanToken.decimals;
-
   return {
     id: row.marketId as `0x${string}`,
     collateralToken,
     loanToken,
     creator: creator as `0x${string}`,
-    lltv,
-    ratePerSecond: row.apy,
+    lltv: BigInt(row.lltv),
+    // The list endpoint exposes `apy` (annual fraction) but not raw rate;
+    // re-encode for downstream contract-call sites that want the bigint.
+    ratePerSecond: annualRateToRatePerSecond(row.apy),
     totalBorrowAssets: {
-      amount: onLoanAmount,
-      usd: row.onLoanUsd ?? 0,
+      amount: BigInt(row.onLoanAmount),
+      usd: row.onLoanUsd,
     },
     totalCollateral: {
-      amount: collateralAmount,
-      usd: row.collateralUsd ?? 0,
+      amount: BigInt(row.collateralAmount),
+      usd: row.collateralUsd,
     },
     apyGenerated: row.apy,
     status: row.status,

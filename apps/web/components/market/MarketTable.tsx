@@ -15,7 +15,13 @@ import { SUPPORTED_TOKENS, type Token } from "@/lib/tokens";
 import { getMarketSlug, type Market } from "@/lib/markets";
 import { useMarkets } from "@/hooks/useMarkets";
 import { fetchMarketDepth } from "@/lib/api/market-depth";
-import { formatCompact, formatPercent, formatUsd } from "@/lib/utils";
+import {
+  fixedPointToFraction,
+  formatPercent,
+  formatTokenBalance,
+  formatUsd,
+  ratePerSecondToAnnual,
+} from "@/lib/utils";
 
 const PAGE_SIZE = 9;
 
@@ -27,6 +33,12 @@ type SortKey =
   | "borrowed"
   | "rate"
   | "avgRate";
+
+// bigint-safe 3-way comparator. JS `-` returns a bigint for two bigints
+// and Array.sort wants a number, so collapse to {-1, 0, 1}.
+function cmpBigint(a: bigint, b: bigint): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
 
 function compareMarkets(
   key: SortKey,
@@ -40,13 +52,13 @@ function compareMarkets(
     case "loan":
       return a.loanToken.symbol.localeCompare(b.loanToken.symbol);
     case "lltv":
-      return a.lltv - b.lltv;
+      return cmpBigint(a.lltv, b.lltv);
     case "liquidity":
-      return a.totalSupplyAssets.usd - b.totalSupplyAssets.usd;
+      return (a.totalSupplyAssets.usd ?? -1) - (b.totalSupplyAssets.usd ?? -1);
     case "borrowed":
-      return a.totalBorrowAssets.usd - b.totalBorrowAssets.usd;
+      return (a.totalBorrowAssets.usd ?? -1) - (b.totalBorrowAssets.usd ?? -1);
     case "rate":
-      return a.ratePerSecond - b.ratePerSecond;
+      return cmpBigint(a.ratePerSecond, b.ratePerSecond);
     case "avgRate":
       // Rows whose avg isn't loaded yet (or has no lenders) sort to the
       // end ascending — same convention `MyLoansCard` uses for null HF.
@@ -346,28 +358,40 @@ function MarketRow({
         <TokenCell token={market.loanToken} />
       </td>
       <td className="px-4 py-4 tabular-nums text-text-primary">
-        {formatPercent(market.lltv)}
+        {formatPercent(fixedPointToFraction(market.lltv))}
       </td>
       <td className="px-4 py-4">
         <p className="font-medium tabular-nums text-text-primary">
-          {formatCompact(market.totalSupplyAssets.amount)}{" "}
+          {formatTokenBalance(
+            market.totalSupplyAssets.amount,
+            market.loanToken.decimals,
+            { compact: true },
+          )}{" "}
           {market.loanToken.symbol}
         </p>
         <p className="text-xs tabular-nums text-text-muted">
-          {formatUsd(market.totalSupplyAssets.usd)}
+          {market.totalSupplyAssets.usd !== null
+            ? formatUsd(market.totalSupplyAssets.usd)
+            : "—"}
         </p>
       </td>
       <td className="px-4 py-4">
         <p className="font-medium tabular-nums text-text-primary">
-          {formatCompact(market.totalBorrowAssets.amount)}{" "}
+          {formatTokenBalance(
+            market.totalBorrowAssets.amount,
+            market.loanToken.decimals,
+            { compact: true },
+          )}{" "}
           {market.loanToken.symbol}
         </p>
         <p className="text-xs tabular-nums text-text-muted">
-          {formatUsd(market.totalBorrowAssets.usd)}
+          {market.totalBorrowAssets.usd !== null
+            ? formatUsd(market.totalBorrowAssets.usd)
+            : "—"}
         </p>
       </td>
       <td className="px-4 py-4 text-right font-medium tabular-nums text-text-primary">
-        {formatPercent(market.ratePerSecond)}
+        {formatPercent(ratePerSecondToAnnual(market.ratePerSecond))}
       </td>
       <td className="px-4 py-4 text-right font-medium tabular-nums text-text-secondary">
         {avgPending

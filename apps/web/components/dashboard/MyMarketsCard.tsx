@@ -19,7 +19,7 @@ import { useLenderProfile } from "@/hooks/useLenderProfile";
 import { useLenderMarkets } from "@/hooks/useLenderMarkets";
 import { useEmbeddedAddress } from "@/hooks/useEmbeddedAddress";
 import type { Token } from "@/lib/tokens";
-import { formatCompact, formatPercent, formatUsd } from "@/lib/utils";
+import { formatPercent, formatTokenBalance, formatUsd } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { txAction } from "@/lib/explorer";
 import { humanizeError } from "@/lib/errors";
@@ -39,9 +39,9 @@ function compare(key: SortKey, a: LenderMarket, b: LenderMarket): number {
     case "loan":
       return a.loanToken.symbol.localeCompare(b.loanToken.symbol);
     case "collateralAmount":
-      return a.totalCollateral.usd - b.totalCollateral.usd;
+      return (a.totalCollateral.usd ?? 0) - (b.totalCollateral.usd ?? 0);
     case "onLoan":
-      return a.totalBorrowAssets.usd - b.totalBorrowAssets.usd;
+      return (a.totalBorrowAssets.usd ?? 0) - (b.totalBorrowAssets.usd ?? 0);
     case "apy":
       return a.apyGenerated - b.apyGenerated;
     case "status":
@@ -232,20 +232,32 @@ export function MyMarketsCard() {
                       </td>
                       <td className="px-4 py-4">
                         <p className="font-medium tabular-nums text-text-primary">
-                          {formatCompact(m.totalCollateral.amount)}{" "}
+                          {formatTokenBalance(
+                            m.totalCollateral.amount,
+                            m.collateralToken.decimals,
+                            { compact: true },
+                          )}{" "}
                           {m.collateralToken.symbol}
                         </p>
                         <p className="text-xs tabular-nums text-text-muted">
-                          {formatUsd(m.totalCollateral.usd)}
+                          {m.totalCollateral.usd !== null
+                            ? formatUsd(m.totalCollateral.usd)
+                            : "—"}
                         </p>
                       </td>
                       <td className="px-4 py-4">
                         <p className="font-medium tabular-nums text-text-primary">
-                          {formatCompact(m.totalBorrowAssets.amount)}{" "}
+                          {formatTokenBalance(
+                            m.totalBorrowAssets.amount,
+                            m.loanToken.decimals,
+                            { compact: true },
+                          )}{" "}
                           {m.loanToken.symbol}
                         </p>
                         <p className="text-xs tabular-nums text-text-muted">
-                          {formatUsd(m.totalBorrowAssets.usd)}
+                          {m.totalBorrowAssets.usd !== null
+                            ? formatUsd(m.totalBorrowAssets.usd)
+                            : "—"}
                         </p>
                       </td>
                       <td className="px-4 py-4 font-medium tabular-nums text-text-primary">

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { parseUnits } from "viem";
 import { Card } from "@/components/ui/Card";
 import { type BorrowerLoan } from "@/lib/borrower";
 import { BorrowerSummary } from "./BorrowerSummary";
@@ -11,21 +10,19 @@ import { RepayModal } from "./RepayModal";
 import { useRepay, type RepayItem } from "@/hooks/useBiviumRouterWrite";
 import { useBorrowerLoans } from "@/hooks/useBorrowerLoans";
 import { useEmbeddedAddress } from "@/hooks/useEmbeddedAddress";
-import { annualRateToRatePerSecond } from "@/lib/utils";
+import { formatTokenBalance } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { txAction } from "@/lib/explorer";
 import { humanizeError } from "@/lib/errors";
 
-function buildRepayItem(loan: BorrowerLoan, amount: number): RepayItem {
-  // parseUnits handles decimal→base-unit conversion safely (no FP noise).
-  const assets = parseUnits(amount.toString(), loan.loanToken.decimals);
+function buildRepayItem(loan: BorrowerLoan, assets: bigint): RepayItem {
   return {
     params: {
       loanToken: loan.loanToken.address,
       collateralToken: loan.collateralToken.address,
       oracle: loan.oracle,
-      ratePerSecond: annualRateToRatePerSecond(loan.ratePerSecond),
-      lltv: BigInt(Math.round(loan.lltv * 1e18)),
+      ratePerSecond: loan.ratePerSecond,
+      lltv: loan.lltv,
       creator: loan.lender as `0x${string}`,
     },
     assets,
@@ -41,16 +38,17 @@ export function BorrowerView() {
   const loans = useMemo(() => query.data ?? [], [query.data]);
 
   const [repayLoan, setRepayLoan] = useState<BorrowerLoan | null>(null);
-  const pendingAmountRef = useRef<number>(0);
+  // Bigint base units of the pending repay, captured for the success toast.
+  const pendingAmountRef = useRef<bigint>(0n);
 
   const repayHook = useRepay();
   const submitting = repayHook.isPending || repayHook.isConfirming;
 
-  const startRepay = (amount: number) => {
+  const startRepay = (amountWei: bigint) => {
     if (!repayLoan) return;
     try {
-      const item = buildRepayItem(repayLoan, amount);
-      pendingAmountRef.current = amount;
+      const item = buildRepayItem(repayLoan, amountWei);
+      pendingAmountRef.current = amountWei;
       repayHook.repay([item]);
     } catch (err) {
       toast.error("Repay setup failed", {
@@ -64,9 +62,9 @@ export function BorrowerView() {
   useEffect(() => {
     if (!repayHook.isSuccess || !repayLoan) return;
     const loan = repayLoan;
-    const amount = pendingAmountRef.current;
+    const amountWei = pendingAmountRef.current;
     const debtAmount = loan.principal.amount + loan.accruedInterest.amount;
-    const closing = amount >= debtAmount - 1e-9;
+    const closing = amountWei >= debtAmount;
 
     const hash = repayHook.hash;
     // Refetch from indexer instead of optimistic mutation — the indexer is
@@ -83,19 +81,21 @@ export function BorrowerView() {
       {
         description: closing
           ? "Collateral unlocked."
-          : `${amount.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${loan.loanToken.symbol} returned to lender.`,
+          : `${formatTokenBalance(amountWei, loan.loanToken.decimals, {
+              maxDecimals: Math.min(loan.loanToken.decimals, 6),
+            })} ${loan.loanToken.symbol} returned to lender.`,
         action: txAction(hash),
       },
     );
 
     setRepayLoan(null);
-    pendingAmountRef.current = 0;
+    pendingAmountRef.current = 0n;
     repayHook.reset();
   }, [repayHook.isSuccess, repayLoan, repayHook, query, queryClient]);
 
   useEffect(() => {
     if (!repayHook.error) return;
-    pendingAmountRef.current = 0;
+    pendingAmountRef.current = 0n;
     toast.error("Repay failed", {
       description: humanizeError(repayHook.error),
     });

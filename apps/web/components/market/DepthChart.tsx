@@ -2,7 +2,11 @@
 
 import { useMemo } from "react";
 import type { DepthStep } from "@/lib/api/market-depth";
-import { formatCompact, formatPercent } from "@/lib/utils";
+import {
+  baseUnitsToNumber,
+  formatCompact,
+  formatPercent,
+} from "@/lib/utils";
 
 interface DepthChartProps {
   steps: DepthStep[];
@@ -52,7 +56,13 @@ export function DepthChart({
     if (steps.length === 0) {
       return null;
     }
-    const xMax = steps[steps.length - 1].cumulativeAmount;
+    // Convert bigint base units → float for plotting. Lossy past ~15
+    // significant digits; only matters for tokens with extreme decimal
+    // counts at huge totals, which the chart already compacts on display.
+    const cum = steps.map((s) =>
+      baseUnitsToNumber(s.cumulativeAmount, loanDecimals),
+    );
+    const xMax = cum[cum.length - 1];
     const rates = steps.map((s) => s.apy);
     const minRate = Math.min(...rates);
     const maxRate = Math.max(...rates);
@@ -68,8 +78,16 @@ export function DepthChart({
     // SVG's right edge, clipping the token symbol.
     const { max: xScaleMax, ticks: xTicksValues } = niceXTicks(xMax, 4);
 
-    return { xMax, xScaleMax, yMin, yMax, yTicksValues, xTicksValues };
-  }, [steps]);
+    return {
+      cum,
+      xMax,
+      xScaleMax,
+      yMin,
+      yMax,
+      yTicksValues,
+      xTicksValues,
+    };
+  }, [steps, loanDecimals]);
 
   if (!layout) {
     return (
@@ -79,7 +97,8 @@ export function DepthChart({
     );
   }
 
-  const { xMax, xScaleMax, yMin, yMax, yTicksValues, xTicksValues } = layout;
+  const { cum, xMax, xScaleMax, yMin, yMax, yTicksValues, xTicksValues } =
+    layout;
 
   const sx = (v: number) =>
     chart.x + (v / Math.max(xScaleMax, 1e-12)) * chart.w;
@@ -92,10 +111,10 @@ export function DepthChart({
   let pathD = `M ${sx(0).toFixed(2)} ${sy(steps[0].apy).toFixed(2)}`;
   for (let i = 0; i < steps.length; i++) {
     const s = steps[i];
-    pathD += ` L ${sx(s.cumulativeAmount).toFixed(2)} ${sy(s.apy).toFixed(2)}`;
+    pathD += ` L ${sx(cum[i]).toFixed(2)} ${sy(s.apy).toFixed(2)}`;
     const next = steps[i + 1];
     if (next) {
-      pathD += ` L ${sx(s.cumulativeAmount).toFixed(2)} ${sy(next.apy).toFixed(2)}`;
+      pathD += ` L ${sx(cum[i]).toFixed(2)} ${sy(next.apy).toFixed(2)}`;
     }
   }
 
@@ -199,15 +218,16 @@ export function DepthChart({
             label are delayed so they appear just after the line has
             passed them. */}
         {steps.map((s, i) => {
-          const prevX = i === 0 ? 0 : steps[i - 1].cumulativeAmount;
-          const midX = (prevX + s.cumulativeAmount) / 2;
-          const dotX = sx(s.cumulativeAmount);
+          const prevX = i === 0 ? 0 : cum[i - 1];
+          const curX = cum[i];
+          const midX = (prevX + curX) / 2;
+          const dotX = sx(curX);
           const dotY = sy(s.apy);
           const labelY = dotY - 12;
           // Line draws over ~900ms starting at 80ms; spread step entrances
           // across that window so each dot pops in once the line has
           // reached it.
-          const progress = s.cumulativeAmount / xMax;
+          const progress = xMax > 0 ? curX / xMax : 0;
           const dotDelay = 80 + Math.round(progress * 900);
           return (
             <g key={`pt-${s.lender}-${i}`}>

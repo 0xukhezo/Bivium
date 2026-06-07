@@ -2,7 +2,8 @@ import { ARBITRUM_TOKENS, type Token } from "./tokens";
 
 export interface LendingAsset {
   token: Token;
-  /** TODO: 1e18 bigint once chain reads land. Today: 0–1 annualized fraction. */
+  /** Annual fraction (0–1), derived for display. The on-chain truth is
+   *  the lender's `BiviumProfile.getRate(loanToken)` 1e18 bigint. */
   ratePerSecond: number;
 }
 
@@ -11,17 +12,22 @@ export interface LenderPreferences {
   collateralAssets: Token[];
 }
 
+// Row in the Lender tab's "Your markets" table. Amounts are bigint base
+// units; rates / lltv are 1e18 fixed-point bigint.
 export interface LenderMarket {
   id: `0x${string}`;
   collateralToken: Token;
   loanToken: Token;
   creator: `0x${string}`;
-  /** TODO: 1e18 bigint. */
-  lltv: number;
-  /** TODO: 1e18 bigint per-second. */
-  ratePerSecond: number;
-  totalBorrowAssets: { amount: number; usd: number };
-  totalCollateral: { amount: number; usd: number };
+  /** 1e18 fixed-point loan-to-value cap. */
+  lltv: bigint;
+  /** 1e18 fixed-point per-second rate. */
+  ratePerSecond: bigint;
+  /** `amount` is loan-token base units. */
+  totalBorrowAssets: { amount: bigint; usd: number | null };
+  /** `amount` is collateral-token base units. */
+  totalCollateral: { amount: bigint; usd: number | null };
+  /** Annual fraction (0–1), derived from `ratePerSecond` for display. */
   apyGenerated: number;
   status: "active" | "paused";
 }
@@ -38,54 +44,4 @@ export const AVAILABLE_COLLATERAL_ASSETS: Token[] = [
   ARBITRUM_TOKENS.WETH,
   ARBITRUM_TOKENS.USDC,
   ARBITRUM_TOKENS.LINK,
-];
-
-export const MOCK_LENDER_PREFERENCES: LenderPreferences = {
-  lendingAssets: [
-    { token: ARBITRUM_TOKENS.USDC, ratePerSecond: 0.05 },
-    { token: ARBITRUM_TOKENS.WETH, ratePerSecond: 0.035 },
-  ],
-  collateralAssets: [ARBITRUM_TOKENS.WBTC, ARBITRUM_TOKENS.WETH],
-};
-
-const MOCK_LENDER_ADDR =
-  `0x${"c".repeat(40)}` as `0x${string}`;
-
-export const MOCK_LENDER_MARKETS: LenderMarket[] = [
-  {
-    id: `0x${"0".repeat(36)}0001`,
-    collateralToken: ARBITRUM_TOKENS.WBTC,
-    loanToken: ARBITRUM_TOKENS.USDC,
-    creator: MOCK_LENDER_ADDR,
-    lltv: 0.86,
-    ratePerSecond: 0.05,
-    totalBorrowAssets: { amount: 540_000, usd: 540_000 },
-    totalCollateral: { amount: 12, usd: 840_000 },
-    apyGenerated: 0.0475,
-    status: "active",
-  },
-  {
-    id: `0x${"0".repeat(36)}0002`,
-    collateralToken: ARBITRUM_TOKENS.WETH,
-    loanToken: ARBITRUM_TOKENS.USDC,
-    creator: MOCK_LENDER_ADDR,
-    lltv: 0.8,
-    ratePerSecond: 0.045,
-    totalBorrowAssets: { amount: 380_000, usd: 380_000 },
-    totalCollateral: { amount: 145, usd: 507_500 },
-    apyGenerated: 0.0418,
-    status: "active",
-  },
-  {
-    id: `0x${"0".repeat(36)}0003`,
-    collateralToken: ARBITRUM_TOKENS.WBTC,
-    loanToken: ARBITRUM_TOKENS.WETH,
-    creator: MOCK_LENDER_ADDR,
-    lltv: 0.75,
-    ratePerSecond: 0.035,
-    totalBorrowAssets: { amount: 0, usd: 0 },
-    totalCollateral: { amount: 0, usd: 0 },
-    apyGenerated: 0,
-    status: "paused",
-  },
 ];

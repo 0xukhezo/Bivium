@@ -1,32 +1,34 @@
 import type { Token } from "./tokens";
 
+// One borrower position. Amounts are bigint base units; lltv is 1e18
+// fixed-point bigint; rates/HF/USD are display-only `number`s.
 export interface BorrowerLoan {
   id: string;
   marketId: `0x${string}`;
   collateralToken: Token;
   loanToken: Token;
-  collateral: { amount: number; usd: number };
-  /** TODO: source of truth once indexer is wired. */
-  borrowShares: number;
-  /** TODO: delete once `borrowShares × totalBorrowAssets / totalBorrowShares` math lands. */
-  principal: { amount: number; usd: number };
-  /** TODO: delete; folded into `borrowShares` math. */
-  accruedInterest: { amount: number; usd: number };
-  /** TODO: 1e18 bigint per-second. */
-  ratePerSecond: number;
-  /** TODO: 1e18 bigint. */
-  lltv: number;
+  /** Collateral base units. */
+  collateral: { amount: bigint; usd: number | null };
+  /** Morpho borrow shares — raw accounting bigint. */
+  borrowShares: bigint;
+  /** Total debt in loan-token base units (folds principal + accrued). */
+  principal: { amount: bigint; usd: number | null };
+  /** Always 0 today — the indexer collapses accrued into `principal`. */
+  accruedInterest: { amount: bigint; usd: number | null };
+  /** 1e18 fixed-point per-second rate. */
+  ratePerSecond: bigint;
+  /** 1e18 fixed-point loan-to-value cap. */
+  lltv: bigint;
   /**
-   * Derived: `(collateral_usd * lltv) / debt_usd`. `null` when either USD
-   * value is missing (no price feed for that token in the indexer).
+   * Indexer-derived health factor (off-chain prices). `null` when either
+   * USD value is missing.
    */
   healthFactor: number | null;
   lender: string;
   /**
-   * Oracle address from the on-chain `MarketParams` tuple. Indexer sources
-   * this from the `CreateMarket` event so the FE never has to derive it.
-   * Required for the Router's `keccak(MarketParams)` → marketId check on
-   * repay / withdraw.
+   * Oracle address from the on-chain `MarketParams` tuple. Required for
+   * the Router's `keccak(MarketParams)` → marketId check on repay /
+   * withdraw.
    */
   oracle: `0x${string}`;
 }
@@ -39,4 +41,3 @@ export function healthBand(hf: number): "safe" | "warn" | "danger" {
   if (hf >= HF_WARN) return "warn";
   return "danger";
 }
-

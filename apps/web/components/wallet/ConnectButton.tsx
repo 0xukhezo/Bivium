@@ -4,10 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useBalance } from "wagmi";
 import { arbitrum } from "wagmi/chains";
-import { Copy, LogOut, ChevronDown } from "lucide-react";
+import { Copy, LogOut, ChevronDown, PowerOff } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { DeactivateProfileModal } from "@/components/dashboard/DeactivateProfileModal";
 import { useMounted } from "@/hooks/useMounted";
 import { useEmbeddedAddress } from "@/hooks/useEmbeddedAddress";
+import { useProfileDelegation } from "@/hooks/useProfileDelegation";
 import { truncateAddress } from "@/lib/utils";
 
 export function ConnectButton() {
@@ -15,6 +17,7 @@ export function ConnectButton() {
   const { ready, authenticated, login, logout } = usePrivy();
   const embedded = useEmbeddedAddress();
   const [open, setOpen] = useState(false);
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -80,8 +83,17 @@ export function ConnectButton() {
             setOpen(false);
             logout();
           }}
+          onDeactivate={() => {
+            setOpen(false);
+            setDeactivateOpen(true);
+          }}
         />
       ) : null}
+
+      <DeactivateProfileModal
+        open={deactivateOpen}
+        onClose={() => setDeactivateOpen(false)}
+      />
     </div>
   );
 }
@@ -90,15 +102,23 @@ function WalletMenu({
   address,
   onCopy,
   onLogout,
+  onDeactivate,
 }: {
   address: `0x${string}`;
   onCopy: () => void;
   onLogout: () => void;
+  onDeactivate: () => void;
 }) {
   const balance = useBalance({
     address,
     chainId: arbitrum.id,
   });
+
+  // Only surface the "Deactivate bivium" item when the EOA currently
+  // delegates — there's nothing to revoke otherwise. The hook keys its
+  // query on the embedded address so it dedupes against the dashboard's
+  // own delegation check.
+  const delegation = useProfileDelegation();
 
   const [copied, setCopied] = useState(false);
   const onCopyClick = () => {
@@ -141,6 +161,17 @@ function WalletMenu({
               : "—"}
         </p>
       </div>
+
+      {delegation.isDelegated ? (
+        <button
+          type="button"
+          onClick={onDeactivate}
+          className="flex w-full items-center gap-2 border-t border-border px-4 py-3 text-left text-sm font-medium text-text-secondary transition-colors duration-base ease-out-expo hover:bg-bg hover:text-danger"
+        >
+          <PowerOff size={14} aria-hidden />
+          Deactivate bivium
+        </button>
+      ) : null}
 
       <button
         type="button"

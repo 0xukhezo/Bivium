@@ -10,7 +10,12 @@ import {
 } from "@/components/ui/SortableHeader";
 import { healthBand, type BorrowerLoan } from "@/lib/borrower";
 import type { Token } from "@/lib/tokens";
-import { formatCompact, formatPercent, formatUsd } from "@/lib/utils";
+import {
+  formatPercent,
+  formatTokenBalance,
+  formatUsd,
+  ratePerSecondToAnnual,
+} from "@/lib/utils";
 
 interface MyLoansCardProps {
   loans: BorrowerLoan[];
@@ -21,17 +26,21 @@ interface MyLoansCardProps {
 type SortKey = "collateral" | "debt" | "rate" | "health";
 
 function debtUsd(loan: BorrowerLoan): number {
-  return loan.principal.usd + loan.accruedInterest.usd;
+  return (loan.principal.usd ?? 0) + (loan.accruedInterest.usd ?? 0);
 }
 
 function compare(key: SortKey, a: BorrowerLoan, b: BorrowerLoan): number {
   switch (key) {
     case "collateral":
-      return a.collateral.usd - b.collateral.usd;
+      return (a.collateral.usd ?? 0) - (b.collateral.usd ?? 0);
     case "debt":
       return debtUsd(a) - debtUsd(b);
     case "rate":
-      return a.ratePerSecond - b.ratePerSecond;
+      return a.ratePerSecond < b.ratePerSecond
+        ? -1
+        : a.ratePerSecond > b.ratePerSecond
+          ? 1
+          : 0;
     case "health":
       // Null sorts to the end (largest) ascending.
       return (
@@ -132,7 +141,7 @@ export function MyLoansCard({
                         />
                       </td>
                       <td className="px-4 py-4 font-medium tabular-nums text-text-primary">
-                        {formatPercent(loan.ratePerSecond)}
+                        {formatPercent(ratePerSecondToAnnual(loan.ratePerSecond))}
                       </td>
                       <td className="px-4 py-4">
                         <HealthBadge value={loan.healthFactor} />
@@ -166,8 +175,8 @@ function AmountCell({
   usd,
 }: {
   token: Token;
-  amount: number;
-  usd: number;
+  amount: bigint;
+  usd: number | null;
 }) {
   return (
     <div className="flex items-center gap-2">
@@ -182,10 +191,11 @@ function AmountCell({
       />
       <div>
         <p className="font-medium tabular-nums text-text-primary">
-          {formatCompact(amount)} {token.symbol}
+          {formatTokenBalance(amount, token.decimals, { compact: true })}{" "}
+          {token.symbol}
         </p>
         <p className="text-xs tabular-nums text-text-muted">
-          {formatUsd(usd)}
+          {usd !== null ? formatUsd(usd) : "—"}
         </p>
       </div>
     </div>

@@ -20,7 +20,9 @@ import { txAction } from "@/lib/explorer";
 import { humanizeError } from "@/lib/errors";
 import {
   annualRateToRatePerSecond,
+  baseUnitsToNumber,
   cn,
+  fixedPointToFraction,
   formatPercent,
   formatTokenAmount,
   formatUsd,
@@ -40,7 +42,8 @@ const HF_DEFAULT = 1.5;
 const SLIPPAGE_DEFAULT = "1"; // % over the best book rate
 
 export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
-  const { loanToken, collateralToken, lltv } = market;
+  const { loanToken, collateralToken } = market;
+  const lltv = fixedPointToFraction(market.lltv);
   const queryClient = useQueryClient();
   const routerAddress = CONTRACT_ADDRESSES.router;
 
@@ -81,8 +84,13 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
   // much of the loan token the user happens to hold.
   const collateralBalance = useTokenBalance(collateralToken);
 
-  // Total fillable depth across all lenders, in loan-token units.
-  const availableDepth = depthQuery.data?.totalAvailable ?? 0;
+  // Total fillable depth across all lenders. Bigint is the source of
+  // truth; the float copy is used by the input clamp + MAX math + display.
+  const availableDepthWei = depthQuery.data?.totalAvailable ?? 0n;
+  const availableDepth = baseUnitsToNumber(
+    availableDepthWei,
+    loanToken.decimals,
+  );
 
   const maxBorrowFromCollateral = useMemo(() => {
     if (
@@ -115,10 +123,10 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
 
   // Walk the real depth top-down (cheapest first), filling `requestedSafe`
   // from each lender's size until the borrow is satisfied or we run out.
-  const walk = useMemo(() => walkDepth(steps, requestedSafe), [
-    steps,
-    requestedSafe,
-  ]);
+  const walk = useMemo(
+    () => walkDepth(steps, requestedSafe, loanToken.decimals),
+    [steps, requestedSafe, loanToken.decimals],
+  );
 
   const borrowUsd = requestedSafe * loanPrice;
   const requiredCollateralUsd = lltv > 0 ? (hf * borrowUsd) / lltv : 0;
@@ -565,13 +573,18 @@ interface DepthWalk {
 // indexer pre-sorted by ratePerSecond ascending, so the cheapest lender
 // fills first. Each step contributes at most `step.sizeAmount` to the
 // borrow.
-function walkDepth(steps: DepthStep[], requested: number): DepthWalk {
+function walkDepth(
+  steps: DepthStep[],
+  requested: number,
+  loanDecimals: number,
+): DepthWalk {
   let remaining = requested;
   let rateXSize = 0;
   const fills: BorrowFill[] = [];
   for (const step of steps) {
     if (remaining <= 1e-12) break;
-    const take = Math.min(remaining, step.sizeAmount);
+    const stepFloat = baseUnitsToNumber(step.sizeAmount, loanDecimals);
+    const take = Math.min(remaining, stepFloat);
     if (take > 1e-12) {
       fills.push({
         lender: step.lender,

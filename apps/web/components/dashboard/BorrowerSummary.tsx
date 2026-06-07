@@ -12,11 +12,11 @@ interface BorrowerSummaryProps {
 export function BorrowerSummary({ loans }: BorrowerSummaryProps) {
   const stats = useMemo(() => {
     const totalDebt = loans.reduce(
-      (acc, l) => acc + l.principal.usd + l.accruedInterest.usd,
+      (acc, l) => acc + (l.principal.usd ?? 0) + (l.accruedInterest.usd ?? 0),
       0,
     );
     const totalCollateral = loans.reduce(
-      (acc, l) => acc + l.collateral.usd,
+      (acc, l) => acc + (l.collateral.usd ?? 0),
       0,
     );
     const hfValues = loans

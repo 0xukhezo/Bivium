@@ -1,7 +1,7 @@
 import { arbitrum } from "wagmi/chains";
 import type { Market } from "@/lib/markets";
 import { getTokenByAddress, type Token } from "@/lib/tokens";
-import { ratePerSecondToAnnual } from "@/lib/utils";
+import { tokenUsdValue } from "@/lib/utils";
 import { API_BASE } from "./client";
 
 interface ApiMarketsResponse {
@@ -63,18 +63,14 @@ function adaptMarket(row: ApiMarketRow): Market {
   const collateralToken = adaptToken(row.collateral);
   const loanToken = adaptToken(row.loan);
 
-  const lltv = Number(BigInt(row.lltv)) / 1e18;
-
-  const denom = 10 ** loanToken.decimals;
-  const supplyAmount = Number(BigInt(row.totalLiquidity)) / denom;
-  const borrowAmount = Number(BigInt(row.totalBorrowed)) / denom;
-  const loanPrice = row.loan.priceUsd ?? 0;
-  const supplyUsd = supplyAmount * loanPrice;
-  const borrowUsd = borrowAmount * loanPrice;
+  const lltv = BigInt(row.lltv);
+  const supplyAmount = BigInt(row.totalLiquidity);
+  const borrowAmount = BigInt(row.totalBorrowed);
+  const loanPrice = row.loan.priceUsd ?? null;
 
   const ratePerSecond = row.bestRatePerSecond
-    ? ratePerSecondToAnnual(BigInt(row.bestRatePerSecond))
-    : 0;
+    ? BigInt(row.bestRatePerSecond)
+    : 0n;
 
   return {
     id: synthesizeId(collateralToken, loanToken),
@@ -84,12 +80,20 @@ function adaptMarket(row: ApiMarketRow): Market {
     creator: CREATOR_PLACEHOLDER,
     ratePerSecond,
     lltv,
-    totalSupplyAssets: { amount: supplyAmount, usd: supplyUsd },
-    totalBorrowAssets: { amount: borrowAmount, usd: borrowUsd },
-    totalSupplyShares: supplyAmount,
-    totalBorrowShares: borrowAmount,
+    totalSupplyAssets: {
+      amount: supplyAmount,
+      usd: tokenUsdValue(supplyAmount, loanToken.decimals, loanPrice),
+    },
+    totalBorrowAssets: {
+      amount: borrowAmount,
+      usd: tokenUsdValue(borrowAmount, loanToken.decimals, loanPrice),
+    },
+    // List endpoint doesn't return raw shares — supply a 0n placeholder.
+    // Consumers that need real shares hit the depth/positions endpoints.
+    totalSupplyShares: 0n,
+    totalBorrowShares: 0n,
     lastAccrualTimestamp: 0,
-    loanPriceUsd: row.loan.priceUsd ?? null,
+    loanPriceUsd: loanPrice,
     collateralPriceUsd: row.collateral.priceUsd ?? null,
   };
 }

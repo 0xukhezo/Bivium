@@ -18,18 +18,6 @@ Tiered by impact, with file references where useful.
 
 The product does not function without these.
 
-- [ ] **Number → bigint migration.** Every `lib/markets.ts`, `lib/lender.ts`,
-  `lib/borrower.ts` field carries a `TODO: 1e18 bigint tomorrow` comment.
-  JS-number is fine for USDC (6 dp) but lossy on ETH/WBTC at 18/8 dp plus
-  USD math.
-  - [ ] Rewrite formatters in `lib/utils.ts` as bigint-aware variants
-    (`formatBaseUnits(value: bigint, decimals: number)`, etc).
-  - [ ] Sweep every consumer of `ratePerSecond` / `lltv` / `amount` /
-    `borrowShares` / `totalSupplyAssets`.
-  - [ ] Specifically: the `parseUnits(requestedSafe.toString(), ...)` /
-    `Math.round(amount * 10**decimals)` conversions in `BorrowModal` and
-    `BorrowerView` go away once amounts are bigint end-to-end.
-
 - [ ] **Lender-side market creation.** After a lender saves a rate +
   accepted collateral, no UI calls `Bivium.createMarket(input)`. Without
   it, no `Bivium:CreateMarket` event fires and `MyMarketsCard` stays

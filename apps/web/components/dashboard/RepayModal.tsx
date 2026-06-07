@@ -13,13 +13,19 @@ import { CONTRACT_ADDRESSES } from "@/lib/contracts/addresses";
 import { toast } from "@/lib/toast";
 import { txAction } from "@/lib/explorer";
 import { humanizeError } from "@/lib/errors";
-import { formatCompact, formatUsd } from "@/lib/utils";
+import {
+  baseUnitsToNumber,
+  fixedPointToFraction,
+  formatTokenBalance,
+  formatUsd,
+} from "@/lib/utils";
 
 interface RepayModalProps {
   loan: BorrowerLoan | null;
   open: boolean;
   onClose: () => void;
-  onConfirm: (amount: number) => void;
+  /** Called with the base-units bigint the user wants to repay. */
+  onConfirm: (amountWei: bigint) => void;
   submitting: boolean;
 }
 
@@ -48,11 +54,7 @@ export function RepayModal({
     if (open) setAmountInput("");
   }, [open, loan?.id]);
 
-  const {
-    amount: walletBalance,
-    isLoading: balanceLoading,
-    isConnected,
-  } = useTokenBalance(loan?.loanToken);
+  const balance = useTokenBalance(loan?.loanToken);
 
   // Loan-token allowance for the Router. Router pulls the repay amount
   // from msg.sender via ERC-20 `transferFrom`, so the user must approve
@@ -85,50 +87,53 @@ export function RepayModal({
 
   if (!loan) return null;
 
-  const debtAmount = loan.principal.amount + loan.accruedInterest.amount;
-  const debtUsd = loan.principal.usd + loan.accruedInterest.usd;
-  const pricePerToken = debtAmount > 0 ? debtUsd / debtAmount : 0;
+  const decimals = loan.loanToken.decimals;
+  const debtAmountWei = loan.principal.amount + loan.accruedInterest.amount;
+  const debtAmountFloat = baseUnitsToNumber(debtAmountWei, decimals);
+  const debtUsd = (loan.principal.usd ?? 0) + (loan.accruedInterest.usd ?? 0);
+  const pricePerToken =
+    debtAmountFloat > 0 ? debtUsd / debtAmountFloat : 0;
 
-  const parsed = parseFloat(amountInput);
-  const amount = Number.isNaN(parsed)
-    ? 0
-    : Math.min(Math.max(parsed, 0), debtAmount);
-  const repayUsd = amount * pricePerToken;
-  const exceedsBalance = amount > walletBalance + 1e-9;
+  // Parse user input into a base-units bigint; clamp to debt. Keep a
+  // float copy for HF projection + USD math.
+  const amountWei = (() => {
+    const parsed = parseFloat(amountInput);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 0n;
+    try {
+      const padded = parsed.toFixed(decimals);
+      const raw = parseUnits(padded, decimals);
+      return raw > debtAmountWei ? debtAmountWei : raw;
+    } catch {
+      return 0n;
+    }
+  })();
+  const amountFloat = baseUnitsToNumber(amountWei, decimals);
+  const repayUsd = amountFloat * pricePerToken;
 
-  const remainingAmount = Math.max(debtAmount - amount, 0);
+  const exceedsBalance = amountWei > balance.raw;
+
+  const remainingWei = debtAmountWei - amountWei;
+  const remainingFloat = baseUnitsToNumber(remainingWei, decimals);
   const remainingUsd = Math.max(debtUsd - repayUsd, 0);
 
+  const collateralUsd = loan.collateral.usd ?? 0;
+  const lltvFraction = fixedPointToFraction(loan.lltv);
   const newHf =
     remainingUsd > 0
-      ? (loan.collateral.usd * loan.lltv) / remainingUsd
+      ? (collateralUsd * lltvFraction) / remainingUsd
       : Number.POSITIVE_INFINITY;
 
-  const valid = amount > 0 && !exceedsBalance && !!routerAddress;
+  const valid = amountWei > 0n && !exceedsBalance && !!routerAddress;
 
-  const balanceKnown = isConnected && !balanceLoading;
-  const insufficientForFull = balanceKnown && walletBalance < debtAmount - 1e-9;
-  const isPartial = amount > 0 && amount < debtAmount - 1e-9;
+  const balanceKnown = balance.isConnected && !balance.isLoading;
+  const insufficientForFull =
+    balanceKnown && balance.raw < debtAmountWei;
+  const isPartial = amountWei > 0n && amountWei < debtAmountWei;
   const remainderNotice = insufficientForFull
     ? "You don't have enough funds in your wallet to repay the full amount. If you proceed to repay with your current amount of funds, you will still have a small borrowing position in your dashboard."
     : isPartial
       ? "You're repaying only part of your debt, so a remaining borrowing position will stay open in your dashboard."
       : null;
-
-  // Base-unit amount the Router will pull. Round UP by one base unit so
-  // FP→bigint quantisation never under-approves and the repay reverts.
-  const amountWei = (() => {
-    if (amount <= 0) return 0n;
-    try {
-      const dust = 10 ** -loan.loanToken.decimals;
-      return parseUnits(
-        (amount + dust).toFixed(loan.loanToken.decimals),
-        loan.loanToken.decimals,
-      );
-    } catch {
-      return 0n;
-    }
-  })();
 
   const needsApproval =
     !!routerAddress &&
@@ -138,11 +143,18 @@ export function RepayModal({
 
   const busy = submitting || approving;
 
-  const setAmount = (value: number) =>
-    setAmountInput(String(Math.round(value * 1e8) / 1e8));
+  // Set the input field from a base-units bigint by rendering its float
+  // form. Display loses precision past ~6 dp but the input is just a UX
+  // affordance; the bigint stays the source of truth.
+  const setAmountFromWei = (wei: bigint) => {
+    setAmountInput(baseUnitsToNumber(wei, decimals).toString());
+  };
 
-  const handleMaxWallet = () => setAmount(Math.min(walletBalance, debtAmount));
-  const handleMaxDebt = () => setAmount(debtAmount);
+  const handleMaxWallet = () => {
+    const max = balance.raw < debtAmountWei ? balance.raw : debtAmountWei;
+    setAmountFromWei(max);
+  };
+  const handleMaxDebt = () => setAmountFromWei(debtAmountWei);
 
   const handleConfirm = () => {
     if (!valid || busy) return;
@@ -150,8 +162,14 @@ export function RepayModal({
       approveHook.approve(amountWei);
       return;
     }
-    onConfirm(amount);
+    onConfirm(amountWei);
   };
+
+  const tokenFmt = (wei: bigint) =>
+    formatTokenBalance(wei, decimals, {
+      maxDecimals: Math.min(decimals, 6),
+      compact: true,
+    });
 
   return (
     <Modal
@@ -162,7 +180,7 @@ export function RepayModal({
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <label className="text-sm text-text-secondary">Amount</label>
         <span className="text-xs tabular-nums text-text-muted">
-          Debt {formatCompact(debtAmount)} {loan.loanToken.symbol}
+          Debt {tokenFmt(debtAmountWei)} {loan.loanToken.symbol}
           <button
             type="button"
             onClick={handleMaxDebt}
@@ -204,7 +222,8 @@ export function RepayModal({
         <div className="mt-2 flex items-center justify-between text-xs text-text-muted">
           <span className="tabular-nums">{formatUsd(repayUsd)}</span>
           <span className="tabular-nums">
-            Wallet balance {balanceLoading ? "…" : formatCompact(walletBalance)}
+            Wallet balance{" "}
+            {balance.isLoading ? "…" : tokenFmt(balance.raw)}
             <button
               type="button"
               onClick={handleMaxWallet}
@@ -235,9 +254,9 @@ export function RepayModal({
           <span className="text-text-secondary">Remaining debt</span>
           <div className="text-right">
             <p className="font-medium tabular-nums text-text-primary">
-              {formatCompact(debtAmount)} {loan.loanToken.symbol}
+              {tokenFmt(debtAmountWei)} {loan.loanToken.symbol}
               <span className="text-text-muted"> → </span>
-              {formatCompact(remainingAmount)} {loan.loanToken.symbol}
+              {tokenFmt(remainingWei)} {loan.loanToken.symbol}
             </p>
             <p className="text-xs tabular-nums text-text-muted">
               {formatUsd(debtUsd)} → {formatUsd(remainingUsd)}
@@ -274,7 +293,7 @@ export function RepayModal({
               : "Sign approval…"
             : submitting
               ? "Confirming…"
-              : amount <= 0
+              : amountWei === 0n
                 ? "Enter an amount"
                 : exceedsBalance
                   ? "Insufficient balance"
@@ -284,4 +303,7 @@ export function RepayModal({
       </ChainAwareButton>
     </Modal>
   );
+  // remainingFloat is computed for future inline previews; keep so the
+  // calculation chain stays explicit.
+  void remainingFloat;
 }
