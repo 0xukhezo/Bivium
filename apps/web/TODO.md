@@ -123,21 +123,10 @@ The product does not function without these.
 
 ## Tier 5 — Polish that'd elevate it
 
-- [ ] **Tooltips on technical terms.** LLTV, HF, ratePerSecond → annualised
-  — no in-context explanations. Add a `Tooltip` primitive and `?` icons
-  next to those labels. One-day task with outsized impact for non-crypto
-  borrowers.
 - [ ] **First-run tour for the dashboard.** After activation, the Lender
   tab shows three cards with no introduction. A 3-step coachmarks pass
   (*"Set your rates" → "Pick collateral" → "Create markets"*) would carry
   first-time users.
-- [ ] **Onboarding for unconnected visitors on the dashboard.** Pre-explain
-  *"Bivium delegates your wallet via EIP-7702 — here's what that means"*
-  before they click Connect.
-- [ ] **`ThemeToggle` on the landing.** Currently only in `AppHeader`; some
-  landing visitors want light mode immediately.
-- [ ] **Optimistic UI + stale-while-revalidate** from React Query so the
-  user never sees an empty table after navigation.
 
 ---
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { fetchLenderMarkets } from "@/lib/api/lenders";
 
 export function useLenderMarkets(address: `0x${string}` | undefined) {
@@ -10,5 +10,8 @@ export function useLenderMarkets(address: `0x${string}` | undefined) {
     enabled: Boolean(address),
     staleTime: 30_000,
     refetchOnWindowFocus: true,
+    // Re-renders + address switches keep the previous rows visible while
+    // the new fetch runs, so the table never flashes to "Loading…".
+    placeholderData: keepPreviousData,
   });
 }

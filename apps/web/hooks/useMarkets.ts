@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { fetchMarkets } from "@/lib/api/markets";
 
 export function useMarkets(opts?: { page?: number; pageSize?: number }) {
@@ -12,5 +12,6 @@ export function useMarkets(opts?: { page?: number; pageSize?: number }) {
     queryFn: ({ signal }) => fetchMarkets({ page, pageSize, signal }),
     staleTime: 30_000,
     refetchOnWindowFocus: true,
+    placeholderData: keepPreviousData,
   });
 }

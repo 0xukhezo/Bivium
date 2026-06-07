@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { Card, CardLabel } from "@/components/ui/Card";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { healthBand, type BorrowerLoan } from "@/lib/borrower";
 import { cn, formatUsd } from "@/lib/utils";
 
@@ -50,7 +51,13 @@ export function BorrowerSummary({ loans }: BorrowerSummaryProps) {
         </p>
       </Card>
       <Card>
-        <CardLabel>Lowest health factor</CardLabel>
+        <span className="flex items-center gap-1.5">
+          <CardLabel>Lowest health factor</CardLabel>
+          <Tooltip
+            side="top"
+            content="The riskiest position across all your loans. HF = (collateral × LLTV) / debt; below 1.0 the position is liquidatable."
+          />
+        </span>
         <p className={cn("mt-2 text-2xl font-semibold tabular-nums", hfColor)}>
           {stats.lowestHf === null ? "—" : stats.lowestHf.toFixed(2)}
         </p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { fetchMarketDepth } from "@/lib/api/market-depth";
 
 export function useMarketDepth(
@@ -18,5 +18,6 @@ export function useMarketDepth(
     enabled: Boolean(collateral && loan),
     staleTime: 30_000,
     refetchOnWindowFocus: true,
+    placeholderData: keepPreviousData,
   });
 }

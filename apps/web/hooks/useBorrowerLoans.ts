@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { fetchBorrowerLoans } from "@/lib/api/borrowers";
 
 export function useBorrowerLoans(address: `0x${string}` | undefined) {
@@ -10,5 +10,6 @@ export function useBorrowerLoans(address: `0x${string}` | undefined) {
     enabled: Boolean(address),
     staleTime: 30_000,
     refetchOnWindowFocus: true,
+    placeholderData: keepPreviousData,
   });
 }

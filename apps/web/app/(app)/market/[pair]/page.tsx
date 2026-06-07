@@ -5,6 +5,7 @@ import { notFound, useParams } from "next/navigation";
 import { useEffect, useMemo } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { DepthChart } from "@/components/market/DepthChart";
 import { LenderOrderbook } from "@/components/market/LenderOrderbook";
 import { MarketDetailActions } from "@/components/market/MarketDetailActions";
@@ -243,6 +244,7 @@ function StatsPanel({ market }: { market: Market }) {
           />
           <StatRow
             label="LLTV"
+            tooltip="Loan-to-value cap. A borrow at LLTV is at HF 1.0; below it triggers liquidation."
             value={formatPercent(fixedPointToFraction(market.lltv))}
           />
           <StatRow label="Utilization" value={formatPercent(util)} />
@@ -256,14 +258,19 @@ function StatRow({
   label,
   value,
   sub,
+  tooltip,
 }: {
   label: string;
   value: string;
   sub?: string;
+  tooltip?: string;
 }) {
   return (
     <div>
-      <p className="text-xs text-text-muted">{label}</p>
+      <p className="flex items-center gap-1.5 text-xs text-text-muted">
+        <span>{label}</span>
+        {tooltip ? <Tooltip side="top" content={tooltip} /> : null}
+      </p>
       <p className="mt-1 text-lg font-semibold tabular-nums text-text-primary">
         {value}
       </p>

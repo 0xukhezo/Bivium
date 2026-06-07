@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { ChevronDown, ChevronsUpDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +17,11 @@ interface SortableHeaderProps<K extends string> {
   sort: SortState<K> | null;
   onSort: (key: K) => void;
   align?: "left" | "right";
+  /**
+   * Optional element rendered alongside the label (outside the sort
+   * button) — typically a `<Tooltip>` explainer for the column.
+   */
+  suffix?: ReactNode;
 }
 
 export function SortableHeader<K extends string>({
@@ -24,6 +30,7 @@ export function SortableHeader<K extends string>({
   sort,
   onSort,
   align = "left",
+  suffix,
 }: SortableHeaderProps<K>) {
   const active = sort?.key === sortKey;
   const direction = active ? sort.direction : null;
@@ -42,28 +49,36 @@ export function SortableHeader<K extends string>({
         align === "right" ? "text-right" : "text-left",
       )}
     >
-      <button
-        type="button"
-        onClick={() => onSort(sortKey)}
+      <span
         className={cn(
-          "inline-flex items-center gap-1.5 transition-colors duration-base ease-out-expo hover:text-text-primary",
+          "inline-flex items-center gap-1.5",
           align === "right" && "flex-row-reverse",
-          active && "text-text-primary",
         )}
       >
-        <span>{label}</span>
-        {direction === "asc" ? (
-          <ChevronUp size={14} aria-hidden="true" className="text-accent" />
-        ) : direction === "desc" ? (
-          <ChevronDown size={14} aria-hidden="true" className="text-accent" />
-        ) : (
-          <ChevronsUpDown
-            size={14}
-            aria-hidden="true"
-            className="opacity-40"
-          />
-        )}
-      </button>
+        <button
+          type="button"
+          onClick={() => onSort(sortKey)}
+          className={cn(
+            "inline-flex items-center gap-1.5 transition-colors duration-base ease-out-expo hover:text-text-primary",
+            align === "right" && "flex-row-reverse",
+            active && "text-text-primary",
+          )}
+        >
+          <span>{label}</span>
+          {direction === "asc" ? (
+            <ChevronUp size={14} aria-hidden="true" className="text-accent" />
+          ) : direction === "desc" ? (
+            <ChevronDown size={14} aria-hidden="true" className="text-accent" />
+          ) : (
+            <ChevronsUpDown
+              size={14}
+              aria-hidden="true"
+              className="opacity-40"
+            />
+          )}
+        </button>
+        {suffix}
+      </span>
     </th>
   );
 }

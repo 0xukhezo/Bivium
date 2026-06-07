@@ -8,6 +8,7 @@ import {
   SortableHeader,
   type SortState,
 } from "@/components/ui/SortableHeader";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { healthBand, type BorrowerLoan } from "@/lib/borrower";
 import type { Token } from "@/lib/tokens";
 import {
@@ -102,12 +103,24 @@ export function MyLoansCard({
                     sortKey="rate"
                     sort={sort}
                     onSort={handleSort}
+                    suffix={
+                      <Tooltip
+                        side="bottom"
+                        content="Annualised borrow rate (APY). On-chain, the lender sets a per-second rate; we render its annualised form for legibility."
+                      />
+                    }
                   />
                   <SortableHeader
                     label="Health"
                     sortKey="health"
                     sort={sort}
                     onSort={handleSort}
+                    suffix={
+                      <Tooltip
+                        side="bottom"
+                        content="Health factor = (collateral × LLTV) / debt. Above 1.5 is safe; between 1.2–1.5 is warning; below 1.0 is liquidatable."
+                      />
+                    }
                   />
                   <th
                     scope="col"

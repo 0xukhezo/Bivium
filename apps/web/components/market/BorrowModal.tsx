@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { TriangleAlert } from "lucide-react";
 import { parseUnits } from "viem";
 import { Modal } from "@/components/ui/Modal";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { ChainAwareButton } from "@/components/wallet/ChainAwareButton";
 import { BorrowFlowSankey, type BorrowFill } from "./BorrowFlowSankey";
 import type { Market } from "@/lib/markets";
@@ -384,12 +385,13 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
           <div className="mb-2 flex items-baseline justify-between gap-2">
-            <label
-              htmlFor="hf-slider"
-              className="text-sm text-text-secondary"
-            >
-              Target health factor
-            </label>
+            <span className="flex items-center gap-1.5 text-sm text-text-secondary">
+              <label htmlFor="hf-slider">Target health factor</label>
+              <Tooltip
+                side="top"
+                content="Where you want the position's HF to land after the borrow. Higher = more collateral required, but more buffer against liquidation."
+              />
+            </span>
             <span className="text-sm font-medium tabular-nums text-text-primary">
               {hf.toFixed(1)}
             </span>
@@ -411,12 +413,13 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
         </div>
 
         <div>
-          <label
-            htmlFor="slippage"
-            className="mb-2 block text-sm text-text-secondary"
-          >
-            Max rate slippage
-          </label>
+          <span className="mb-2 flex items-center gap-1.5 text-sm text-text-secondary">
+            <label htmlFor="slippage">Max rate slippage</label>
+            <Tooltip
+              side="top"
+              content="Caps the weighted-average rate you'll pay. If the orderbook walk would push the average above (best rate × (1 + slippage)), the borrow is rejected."
+            />
+          </span>
           <div className="flex h-10 items-center rounded-md border border-border bg-bg px-3">
             <input
               id="slippage"
@@ -503,9 +506,14 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
         <SummaryRow
           label="Weighted avg rate"
           value={formatPercent(walk.weightedAvgRate)}
+          tooltip="Size-weighted average APY across the lenders this borrow would draw from."
         />
         <Divider />
-        <SummaryRow label="LLTV" value={formatPercent(lltv)} />
+        <SummaryRow
+          label="LLTV"
+          value={formatPercent(lltv)}
+          tooltip="Loan-to-value cap. A borrow at LLTV is at HF 1.0; below it triggers liquidation."
+        />
       </div>
 
       <ChainAwareButton
@@ -540,14 +548,19 @@ function SummaryRow({
   label,
   value,
   sub,
+  tooltip,
 }: {
   label: string;
   value: string;
   sub?: string;
+  tooltip?: string;
 }) {
   return (
     <div className="flex items-start justify-between gap-4 py-2">
-      <span className="text-text-secondary">{label}</span>
+      <span className="flex items-center gap-1.5 text-text-secondary">
+        <span>{label}</span>
+        {tooltip ? <Tooltip side="top" content={tooltip} /> : null}
+      </span>
       <div className="text-right">
         <p className="font-medium tabular-nums text-text-primary">{value}</p>
         {sub ? (

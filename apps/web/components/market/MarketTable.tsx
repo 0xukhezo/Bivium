@@ -10,6 +10,7 @@ import {
   SortableHeader,
   type SortState,
 } from "@/components/ui/SortableHeader";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { TokenFilterDropdown } from "@/components/market/TokenFilterDropdown";
 import { SUPPORTED_TOKENS, type Token } from "@/lib/tokens";
 import { getMarketSlug, type Market } from "@/lib/markets";
@@ -248,6 +249,12 @@ export function MarketTable() {
                     sortKey="lltv"
                     sort={sort}
                     onSort={handleSort}
+                    suffix={
+                      <Tooltip
+                        side="bottom"
+                        content="Loan-to-value cap. A borrow at exactly LLTV puts the position at HF 1.0 — one tick lower triggers liquidation."
+                      />
+                    }
                   />
                   <SortableHeader
                     label="Total Liquidity"
@@ -274,6 +281,12 @@ export function MarketTable() {
                     sort={sort}
                     onSort={handleSort}
                     align="right"
+                    suffix={
+                      <Tooltip
+                        side="bottom"
+                        content="Size-weighted average APY across every lender in this pair. A borrower drawing the full depth would pay roughly this rate on average."
+                      />
+                    }
                   />
                 </tr>
               </thead>

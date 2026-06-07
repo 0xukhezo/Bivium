@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { TriangleAlert } from "lucide-react";
 import { parseUnits } from "viem";
 import { Modal } from "@/components/ui/Modal";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { ChainAwareButton } from "@/components/wallet/ChainAwareButton";
 import { healthBand, type BorrowerLoan } from "@/lib/borrower";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
@@ -264,7 +265,13 @@ export function RepayModal({
           </div>
         </div>
         <div className="flex items-start justify-between gap-4 border-t border-border py-3">
-          <span className="text-text-secondary">Health factor</span>
+          <span className="flex items-center gap-1.5 text-text-secondary">
+            <span>Health factor</span>
+            <Tooltip
+              side="top"
+              content="HF = (collateral × LLTV) / debt. Repaying reduces debt, so HF rises. Below 1.0 is liquidatable."
+            />
+          </span>
           <div className="text-right">
             <p className="font-medium tabular-nums">
               <span className={hfColor(loan.healthFactor)}>
