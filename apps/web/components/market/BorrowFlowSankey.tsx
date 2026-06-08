@@ -1,7 +1,7 @@
 "use client";
 
 import { ResponsiveSankey } from "@nivo/sankey";
-import { useAccount } from "wagmi";
+import { useEmbeddedAddress } from "@/hooks/useEmbeddedAddress";
 import type { Token } from "@/lib/tokens";
 import { formatCompact, formatPercent, truncateAddress } from "@/lib/utils";
 
@@ -25,7 +25,11 @@ interface BorrowFlowSankeyProps {
 // Rate badges are an HTML overlay because @nivo/sankey@0.88's `layers` prop
 // only accepts built-in IDs — no custom React layers.
 export function BorrowFlowSankey({ fills, loanToken }: BorrowFlowSankeyProps) {
-  const { address } = useAccount();
+  // Read from Privy directly — every other component in this modal
+  // already uses the embedded wallet as the source of truth, and this
+  // avoids re-entering the wagmi context (which is lazy-mounted behind
+  // PrivyProvider).
+  const address = useEmbeddedAddress();
   const youLabel = address ? truncateAddress(address) : "You";
 
   if (fills.length === 0) return null;

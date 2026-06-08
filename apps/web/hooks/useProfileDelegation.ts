@@ -23,14 +23,12 @@ export function useProfileDelegation() {
     queryFn: async () => {
       if (!publicClient || !address) return { code: null, target: null };
       const code = (await publicClient.getCode({ address })) ?? "0x";
-      if (typeof window !== "undefined") {
-        console.log("[delegation] address", address, "code", code);
-      }
       if (!code || code === "0x")
         return { code, target: null as `0x${string}` | null };
       if (!code.toLowerCase().startsWith(DELEGATION_PREFIX))
         return { code, target: null as `0x${string}` | null };
-      const target = `0x${code.slice(DELEGATION_PREFIX.length)}` as `0x${string}`;
+      const target =
+        `0x${code.slice(DELEGATION_PREFIX.length)}` as `0x${string}`;
       return {
         code,
         target: target.toLowerCase() as `0x${string}`,

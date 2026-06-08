@@ -20,11 +20,6 @@ import {
 
 interface MyLoansCardProps {
   loans: BorrowerLoan[];
-  /**
-   * Live HF per loan id (from `useLiveHealthFactors`). Used for both
-   * sorting and the badge value.
-   */
-  liveHfById?: ReadonlyMap<string, number | null>;
   onSelectRepay: (loan: BorrowerLoan) => void;
   submitting: boolean;
 }
@@ -35,20 +30,7 @@ function debtUsd(loan: BorrowerLoan): number {
   return (loan.principal.usd ?? 0) + (loan.accruedInterest.usd ?? 0);
 }
 
-function hfFor(
-  loan: BorrowerLoan,
-  live?: ReadonlyMap<string, number | null>,
-): number | null {
-  const liveValue = live?.get(loan.id);
-  return liveValue !== undefined ? liveValue : loan.healthFactor;
-}
-
-function compare(
-  key: SortKey,
-  a: BorrowerLoan,
-  b: BorrowerLoan,
-  live?: ReadonlyMap<string, number | null>,
-): number {
+function compare(key: SortKey, a: BorrowerLoan, b: BorrowerLoan): number {
   switch (key) {
     case "collateral":
       return (a.collateral.usd ?? 0) - (b.collateral.usd ?? 0);
@@ -63,15 +45,14 @@ function compare(
     case "health":
       // Null sorts to the end (largest) ascending.
       return (
-        (hfFor(a, live) ?? Number.POSITIVE_INFINITY) -
-        (hfFor(b, live) ?? Number.POSITIVE_INFINITY)
+        (a.healthFactor ?? Number.POSITIVE_INFINITY) -
+        (b.healthFactor ?? Number.POSITIVE_INFINITY)
       );
   }
 }
 
 export function MyLoansCard({
   loans,
-  liveHfById,
   onSelectRepay,
   submitting,
 }: MyLoansCardProps) {
@@ -82,10 +63,8 @@ export function MyLoansCard({
   const sorted = useMemo(() => {
     if (!sort) return loans;
     const dir = sort.direction === "asc" ? 1 : -1;
-    return [...loans].sort(
-      (a, b) => compare(sort.key, a, b, liveHfById) * dir,
-    );
-  }, [loans, sort, liveHfById]);
+    return [...loans].sort((a, b) => compare(sort.key, a, b) * dir);
+  }, [loans, sort]);
 
   return (
     <Card>
@@ -178,7 +157,7 @@ export function MyLoansCard({
                         {formatPercent(ratePerSecondToAnnual(loan.ratePerSecond))}
                       </td>
                       <td className="px-4 py-4">
-                        <HealthBadge value={hfFor(loan, liveHfById)} />
+                        <HealthBadge value={loan.healthFactor} />
                       </td>
                       <td className="w-32 px-4 py-4 text-right">
                         <button

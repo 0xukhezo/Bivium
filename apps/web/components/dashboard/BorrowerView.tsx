@@ -10,7 +10,6 @@ import { RepayModal } from "./RepayModal";
 import { useRepay, type RepayItem } from "@/hooks/useBiviumRouterWrite";
 import { useBorrowerLoans } from "@/hooks/useBorrowerLoans";
 import { useEmbeddedAddress } from "@/hooks/useEmbeddedAddress";
-import { useLiveHealthFactors } from "@/hooks/useLiveHealthFactors";
 import { formatTokenBalance } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { txAction } from "@/lib/explorer";
@@ -37,12 +36,6 @@ export function BorrowerView() {
   const query = useBorrowerLoans(address);
   const queryClient = useQueryClient();
   const loans = useMemo(() => query.data ?? [], [query.data]);
-
-  // Live HF per loan, re-derived from on-chain oracle prices every block.
-  // Falls back to the indexer-derived `loan.healthFactor` whenever the
-  // oracle read fails. Lifted to the parent so `BorrowerSummary` and
-  // `MyLoansCard` share the same map (one batched read, not two).
-  const liveHf = useLiveHealthFactors(loans);
 
   const [repayLoan, setRepayLoan] = useState<BorrowerLoan | null>(null);
   // Bigint base units of the pending repay, captured for the success toast.
@@ -128,20 +121,15 @@ export function BorrowerView() {
 
   return (
     <div className="flex flex-col gap-6">
-      <BorrowerSummary loans={loans} liveHfById={liveHf.byId} />
+      <BorrowerSummary loans={loans} />
       <MyLoansCard
         loans={loans}
-        liveHfById={liveHf.byId}
         onSelectRepay={setRepayLoan}
         submitting={submitting}
       />
       <RepayModal
         loan={repayLoan}
-        currentHf={
-          repayLoan
-            ? (liveHf.byId.get(repayLoan.id) ?? repayLoan.healthFactor)
-            : null
-        }
+        currentHf={repayLoan?.healthFactor ?? null}
         open={repayLoan !== null}
         onClose={() => {
           if (submitting) return;

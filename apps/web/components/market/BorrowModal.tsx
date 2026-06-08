@@ -15,6 +15,8 @@ import { useMarketDepth } from "@/hooks/useMarketDepth";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
 import { useTokenAllowance } from "@/hooks/useTokenAllowance";
 import { useApprove } from "@/hooks/useApprove";
+import { useIsBiviumAuthorized } from "@/hooks/useIsBiviumAuthorized";
+import { useSetBiviumAuthorization } from "@/hooks/useBiviumWrite";
 import { useBorrow, type BorrowOrder } from "@/hooks/useBiviumRouterWrite";
 import { toast } from "@/lib/toast";
 import { txAction } from "@/lib/explorer";
@@ -40,6 +42,15 @@ const HF_MAX = 5;
 const HF_STEP = 0.1;
 const HF_DEFAULT = 1.5;
 
+// Tolerance between the modal's HF math (uses indexer USD prices) and
+// the Router's check (uses on-chain oracle prices). With the contract's
+// `minHealthFactor` set exactly to the user-picked value, oracle drift of
+// even 0.1% can push the simulated HF below the floor and revert.
+// Sending the floor 0.5% under user-target absorbs that drift while
+// staying close to the user's stated risk preference.
+const MIN_HF_SLACK_BPS = 50n;
+const BPS = 10_000n;
+
 const SLIPPAGE_DEFAULT = "1"; // % over the best book rate
 
 export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
@@ -61,7 +72,10 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
   }, [open]);
 
   // Real orderbook depth: pre-sorted steps from the indexer (cheapest
-  // rate first), one per lender qualifying for this pair.
+  // rate first), one per lender qualifying for this pair. Every lender
+  // listed here is reachable — `Profile.fulfillBorrow` auto-creates the
+  // on-chain market the first time it's drawn against, so we never need
+  // to filter out "uninitialised" lenders.
   const depthQuery = useMarketDepth(
     collateralToken.address,
     loanToken.address,
@@ -85,9 +99,15 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
   // much of the loan token the user happens to hold.
   const collateralBalance = useTokenBalance(collateralToken);
 
-  // Total fillable depth across all lenders. Bigint is the source of
-  // truth; the float copy is used by the input clamp + MAX math + display.
-  const availableDepthWei = depthQuery.data?.totalAvailable ?? 0n;
+  // Total reachable depth: only count lenders whose on-chain market has
+  // actually been created. Lenders that show up in the raw depth but
+  // haven't `createMarket`'d for this pair contribute 0 here even though
+  // they have nominal liquidity, because the Router would revert when
+  // trying to fill from them.
+  const availableDepthWei = steps.reduce(
+    (acc, s) => acc + s.sizeAmount,
+    0n,
+  );
   const availableDepth = baseUnitsToNumber(
     availableDepthWei,
     loanToken.decimals,
@@ -184,16 +204,24 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
     }
   }, [requiredCollateralAmount, collateralToken.decimals]);
 
-  // Allowance + write hooks. Approve uses ERC-20 `approve(router, amount)`;
-  // borrow uses `BiviumRouter.borrow(BorrowOrder)`.
+  // Allowance + auth + write hooks. The full borrower-side cascade is:
+  //   1) `Bivium.setAuthorization(router, true)` (one-time, covers every
+  //      future borrow — required for the Router to call
+  //      `borrow(onBehalf=borrower)` on the core)
+  //   2) ERC-20 `approve(router, collateral)` (per collateral token)
+  //   3) `BiviumRouter.borrow(BorrowOrder)`
+  const authQuery = useIsBiviumAuthorized(routerAddress);
+  const authWrite = useSetBiviumAuthorization();
   const allowance = useTokenAllowance(collateralToken, routerAddress);
   const approveHook = useApprove(collateralToken, routerAddress);
   const borrowHook = useBorrow();
 
+  const authorising = authWrite.isPending || authWrite.isConfirming;
   const approving = approveHook.isPending || approveHook.isConfirming;
   const borrowing = borrowHook.isPending || borrowHook.isConfirming;
-  const submitting = approving || borrowing;
+  const submitting = authorising || approving || borrowing;
 
+  const needsAuthorization = !authQuery.isLoading && !authQuery.isAuthorized;
   const needsApproval =
     collateralAmountWei > 0n && allowance.allowance < collateralAmountWei;
 
@@ -214,18 +242,23 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
 
   const submit = () => {
     if (!valid || submitting) return;
+    if (!routerAddress) return;
+    if (needsAuthorization) {
+      authWrite.setAuthorization(routerAddress, true);
+      return;
+    }
     if (needsApproval) {
       approveHook.approve(collateralAmountWei);
       return;
     }
-    if (!routerAddress) return;
     const order: BorrowOrder = {
       loanToken: loanToken.address,
       collateralToken: collateralToken.address,
       loanAmount: loanAmountWei,
       collateralAmount: collateralAmountWei,
       maxAvgRatePerSecond: annualRateToRatePerSecond(maxAvgRate),
-      minHealthFactor: BigInt(Math.round(hf * 1e18)),
+      minHealthFactor:
+        (BigInt(Math.round(hf * 1e18)) * (BPS - MIN_HF_SLACK_BPS)) / BPS,
       candidates: walk.fills.map((f) => ({
         creator: f.lender as `0x${string}`,
         ratePerSecond: f.ratePerSecondRaw,
@@ -233,6 +266,28 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
     };
     borrowHook.borrow(order);
   };
+
+
+  // Authorize landed → refetch isAuthorized so the button flips to
+  // "Approve …" (or straight to "Borrow" if already approved).
+  useEffect(() => {
+    if (!authWrite.isSuccess) return;
+    const hash = authWrite.hash;
+    authQuery.refetch();
+    toast.success("Router authorised", {
+      description: "You can now route borrows through the Bivium router.",
+      action: txAction(hash),
+    });
+    authWrite.reset();
+  }, [authWrite.isSuccess, authWrite, authQuery]);
+
+  useEffect(() => {
+    if (!authWrite.error) return;
+    toast.error("Authorisation failed", {
+      description: humanizeError(authWrite.error),
+    });
+    authWrite.reset();
+  }, [authWrite.error, authWrite]);
 
   // Approve landed → refetch allowance so the button flips to "Borrow".
   useEffect(() => {
@@ -525,8 +580,10 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
       >
         {buttonLabel({
           submitting,
+          authorising,
           approving,
           borrowing,
+          isConfirmingAuth: authWrite.isConfirming,
           isConfirmingApprove: approveHook.isConfirming,
           isConfirmingBorrow: borrowHook.isConfirming,
           requestedSafe,
@@ -534,6 +591,7 @@ export function BorrowModal({ market, open, onClose }: BorrowModalProps) {
           exceedsDepth,
           insufficientCollateralBalance,
           slippageExceeded,
+          needsAuthorization,
           needsApproval,
           loanSymbol: loanToken.symbol,
           collateralSymbol: collateralToken.symbol,
@@ -620,8 +678,10 @@ function walkDepth(
 
 interface ButtonLabelArgs {
   submitting: boolean;
+  authorising: boolean;
   approving: boolean;
   borrowing: boolean;
+  isConfirmingAuth: boolean;
   isConfirmingApprove: boolean;
   isConfirmingBorrow: boolean;
   requestedSafe: number;
@@ -629,6 +689,7 @@ interface ButtonLabelArgs {
   exceedsDepth: boolean;
   insufficientCollateralBalance: boolean;
   slippageExceeded: boolean;
+  needsAuthorization: boolean;
   needsApproval: boolean;
   loanSymbol: string;
   collateralSymbol: string;
@@ -637,6 +698,10 @@ interface ButtonLabelArgs {
 
 function buttonLabel(a: ButtonLabelArgs): string {
   if (!a.routerConfigured) return "Router not configured";
+  if (a.authorising)
+    return a.isConfirmingAuth
+      ? "Confirming authorisation…"
+      : "Sign authorisation…";
   if (a.approving)
     return a.isConfirmingApprove ? "Confirming approval…" : "Sign approval…";
   if (a.borrowing)
@@ -647,6 +712,7 @@ function buttonLabel(a: ButtonLabelArgs): string {
   if (a.exceedsDepth) return "Not enough depth";
   if (a.exceedsCollateral) return "Insufficient collateral";
   if (a.slippageExceeded) return "Rate exceeds slippage";
+  if (a.needsAuthorization) return "Authorise router";
   if (a.needsApproval) return `Approve ${a.collateralSymbol}`;
   return `Borrow ${a.loanSymbol}`;
 }

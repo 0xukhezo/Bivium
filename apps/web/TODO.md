@@ -16,14 +16,8 @@ Tiered by impact, with file references where useful.
 
 ## Tier 1 — Hard blockers
 
-The product does not function without these.
-
-- [ ] **Lender-side market creation.** After a lender saves a rate +
-  accepted collateral, no UI calls `Bivium.createMarket(input)`. Without
-  it, no `Bivium:CreateMarket` event fires and `MyMarketsCard` stays
-  empty — borrowers have nothing to draw from. Either a "Create market"
-  button per (lendable × accepted-collateral) pair, or auto-fan-out at the
-  end of the activation wizard.
+Tier 1 is empty — every hard blocker has shipped. The full lender →
+borrower → repay loop works end-to-end on Arbitrum.
 
 ---
 
