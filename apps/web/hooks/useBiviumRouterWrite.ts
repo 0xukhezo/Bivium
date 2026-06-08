@@ -44,6 +44,44 @@ export function useRepay() {
   };
 }
 
+// Router's `ClosePositionItem` — repays then withdraws collateral in a
+// single atomic tx. Use shares-mode (`assets=0`, `shares=borrowShares`)
+// when closing a position so the repay zeroes the debt regardless of
+// interest that accrued between the indexer read and execution;
+// otherwise `withdrawCollateral` reverts on the HF check.
+export interface ClosePositionItem {
+  params: MarketParams;
+  assets: bigint;
+  shares: bigint;
+  /** Loan-token base units the Router is allowed to pull. */
+  maxAssetsIn: bigint;
+  /** Collateral base units to withdraw after the repay. */
+  collateralAmount: bigint;
+}
+
+export function useClosePosition() {
+  const write = useEmbeddedWriteContract();
+
+  const closePosition = (items: readonly ClosePositionItem[]) => {
+    write.writeContract({
+      address: requireAddress("router"),
+      abi: BiviumRouterAbi,
+      functionName: "closePosition",
+      args: [items],
+    });
+  };
+
+  return {
+    closePosition,
+    hash: write.hash,
+    isPending: write.isPending,
+    isConfirming: write.isConfirming,
+    isSuccess: write.isSuccess,
+    error: write.error,
+    reset: write.reset,
+  };
+}
+
 // Router's BorrowOrder struct (see BiviumRouter.sol). The Router walks
 // `candidates` in order, drawing each lender's available size at their
 // `ratePerSecond` until `loanAmount` is filled. Pulls `collateralAmount`
