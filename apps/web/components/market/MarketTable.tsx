@@ -284,6 +284,7 @@ export function MarketTable() {
                     suffix={
                       <Tooltip
                         side="bottom"
+                        align="end"
                         content="Size-weighted average APY across every lender in this pair. A borrower drawing the full depth would pay roughly this rate on average."
                       />
                     }

@@ -8,9 +8,15 @@ import { cn, formatUsd } from "@/lib/utils";
 
 interface BorrowerSummaryProps {
   loans: BorrowerLoan[];
+  /**
+   * Live HF per loan id from `useLiveHealthFactors`. When a value is
+   * present we prefer it over the indexer's stale snapshot; otherwise we
+   * fall back to `loan.healthFactor`.
+   */
+  liveHfById?: ReadonlyMap<string, number | null>;
 }
 
-export function BorrowerSummary({ loans }: BorrowerSummaryProps) {
+export function BorrowerSummary({ loans, liveHfById }: BorrowerSummaryProps) {
   const stats = useMemo(() => {
     const totalDebt = loans.reduce(
       (acc, l) => acc + (l.principal.usd ?? 0) + (l.accruedInterest.usd ?? 0),
@@ -21,11 +27,11 @@ export function BorrowerSummary({ loans }: BorrowerSummaryProps) {
       0,
     );
     const hfValues = loans
-      .map((l) => l.healthFactor)
+      .map((l) => liveHfById?.get(l.id) ?? l.healthFactor)
       .filter((v): v is number => v !== null);
     const lowestHf = hfValues.length === 0 ? null : Math.min(...hfValues);
     return { totalDebt, totalCollateral, lowestHf };
-  }, [loans]);
+  }, [loans, liveHfById]);
 
   const hfColor =
     stats.lowestHf === null

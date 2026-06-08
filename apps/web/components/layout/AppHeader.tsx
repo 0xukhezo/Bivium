@@ -5,6 +5,7 @@ import { Logo } from "./Logo";
 import { NavLink } from "./NavLink";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ConnectButton } from "@/components/wallet/ConnectButton";
+import { ChainSwitchBanner } from "@/components/wallet/ChainSwitchBanner";
 import { MobileDrawer, MobileMenuTrigger } from "./MobileDrawer";
 
 export function AppHeader() {
@@ -34,6 +35,7 @@ export function AppHeader() {
           </div>
         </div>
       </header>
+      <ChainSwitchBanner />
       <MobileDrawer open={open} onClose={() => setOpen(false)} />
     </>
   );

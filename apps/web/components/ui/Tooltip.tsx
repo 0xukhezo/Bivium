@@ -11,6 +11,13 @@ interface TooltipProps {
   label?: string;
   /** Where the popover anchors relative to the trigger. */
   side?: "top" | "bottom";
+  /**
+   * Horizontal alignment of the popover. `"center"` is the default;
+   * `"end"` right-aligns the popover with the trigger (use this near
+   * right edges so the popover doesn't clip outside its scroll container).
+   * `"start"` left-aligns it (use near left edges).
+   */
+  align?: "center" | "start" | "end";
   /** Trigger element. Defaults to a small `?` icon. */
   children?: ReactNode;
   className?: string;
@@ -24,6 +31,7 @@ export function Tooltip({
   content,
   label = "More info",
   side = "top",
+  align = "center",
   children,
   className,
 }: TooltipProps) {
@@ -71,10 +79,11 @@ export function Tooltip({
         <span
           role="tooltip"
           className={cn(
-            "pointer-events-none absolute left-1/2 z-50 w-max max-w-xs -translate-x-1/2 rounded-md border border-border bg-bg-elevated px-3 py-2 text-xs font-normal leading-snug text-text-secondary shadow-card",
-            side === "top"
-              ? "bottom-full mb-2"
-              : "top-full mt-2",
+            "pointer-events-none absolute z-50 w-max max-w-xs rounded-md border border-border bg-bg-elevated px-3 py-2 text-xs font-normal leading-snug text-text-secondary shadow-card",
+            side === "top" ? "bottom-full mb-2" : "top-full mt-2",
+            align === "center" && "left-1/2 -translate-x-1/2",
+            align === "start" && "left-0",
+            align === "end" && "right-0",
           )}
         >
           {content}

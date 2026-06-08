@@ -23,6 +23,12 @@ import {
 
 interface RepayModalProps {
   loan: BorrowerLoan | null;
+  /**
+   * Live HF for the selected loan (re-derived from on-chain oracle prices
+   * every block). When provided, used instead of the indexer's stale
+   * snapshot for the "current HF" display.
+   */
+  currentHf?: number | null;
   open: boolean;
   onClose: () => void;
   /** Called with the base-units bigint the user wants to repay. */
@@ -43,6 +49,7 @@ function formatHf(hf: number | null): string {
 
 export function RepayModal({
   loan,
+  currentHf,
   open,
   onClose,
   onConfirm,
@@ -274,8 +281,8 @@ export function RepayModal({
           </span>
           <div className="text-right">
             <p className="font-medium tabular-nums">
-              <span className={hfColor(loan.healthFactor)}>
-                {formatHf(loan.healthFactor)}
+              <span className={hfColor(currentHf ?? loan.healthFactor)}>
+                {formatHf(currentHf ?? loan.healthFactor)}
               </span>
               <span className="text-text-muted"> → </span>
               <span className={hfColor(newHf)}>{formatHf(newHf)}</span>

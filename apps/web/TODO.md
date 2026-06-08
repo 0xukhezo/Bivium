@@ -29,13 +29,6 @@ The product does not function without these.
 
 ## Tier 2 — UX-blocking gaps
 
-- [ ] **Global chain-switch guard.** `ChainAwareButton` covers individual
-  buttons but there's no app-wide banner. Wrong-chain users on
-  `/dashboard` or `/market/[pair]` get cryptic wagmi errors from read
-  paths. Add a banner: *"You're on Ethereum mainnet. Switch to Arbitrum to
-  continue."* with a `switchChain` CTA in `AppHeader` or a layout-level
-  component.
-
 - [ ] **Borrower deposit / withdraw collateral.**
   - [ ] `BiviumProfile.sol` exposes `withdrawFromMarket(MarketParams, amount)`
     — no UI.
@@ -62,11 +55,6 @@ The product does not function without these.
   panel (*"3 transactions pending: setRate USDC, setRate WBTC,
   setAllowedCollaterals"*) would survive reloads.
 
-- [ ] **Live HF + utilization.** `RepayModal` recomputes HF locally as the
-  user types (good), but the displayed HF on `MyLoansCard` is the
-  indexer-derived `healthFactor` (off-chain price feed, stale by minutes).
-  With real oracle prices HF moves; the dashboard should subscribe to
-  oracle updates and re-derive HF live.
 
 ---
 
