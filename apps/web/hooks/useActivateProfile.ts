@@ -114,6 +114,12 @@ export function useActivateProfile(opts: UseActivateProfileOptions = {}) {
         // dispatcher trick isn't needed (and would revert). Send empty
         // calldata — a plain self-call.
         data: isRevoke ? "0x" : callData,
+        // eth_estimateGas on most RPCs (including public Arbitrum) does not
+        // account for the EIP-7702 authorization-list intrinsic cost
+        // (21k base + 12.5k PER_AUTH + 25k PER_EMPTY_ACCOUNT ≈ 58.5k for one
+        // auth). Pin a safe lower bound so the chain doesn't reject with
+        // "intrinsic gas too low" after a stale estimate.
+        gas: 120_000n,
       });
       setHash(txHash);
 
